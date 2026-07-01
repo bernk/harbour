@@ -114,6 +114,7 @@
   var formOverlay = document.getElementById('marker-form-overlay');
   var formTitle = document.getElementById('marker-form-title');
   var labelInput = document.getElementById('marker-label-input');
+  var coordsInput = document.getElementById('marker-coords-input');
   var radiusInput = document.getElementById('marker-radius-input');
   var radiusValue = document.getElementById('marker-radius-value');
   var formDeleteBtn = document.getElementById('marker-form-delete');
@@ -154,6 +155,20 @@
   function handlePositionFor(centerLat, centerLng, radiusMeters) {
     var p = destinationPoint(centerLat, centerLng, radiusMeters, 90);
     return L.latLng(p.lat, p.lng);
+  }
+
+  function formatCoords(lat, lng) {
+    return lat.toFixed(6) + ', ' + lng.toFixed(6);
+  }
+
+  function parseCoords(value) {
+    var parts = value.split(',');
+    if (parts.length !== 2) return null;
+    var lat = parseFloat(parts[0]);
+    var lng = parseFloat(parts[1]);
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat: lat, lng: lng };
   }
 
   function categoryColor(category) {
@@ -506,6 +521,8 @@
       label: '',
       category: category,
       radius: DEFAULT_RADIUS,
+      lat: e.latlng.lat,
+      lng: e.latlng.lng,
       showDelete: false
     });
   });
@@ -514,6 +531,8 @@
   function openMarkerForm(opts) {
     formTitle.textContent = opts.title;
     labelInput.value = opts.label || '';
+    coordsInput.value = formatCoords(opts.lat, opts.lng);
+    coordsInput.classList.remove('input-invalid');
     radiusInput.value = opts.radius;
     radiusValue.textContent = Math.round(opts.radius) + ' m';
     var radios = document.getElementsByName('category');
@@ -538,9 +557,36 @@
       label: markerData.label,
       category: markerData.category,
       radius: markerData.radiusMeters,
+      lat: markerData.centerLat,
+      lng: markerData.centerLng,
       showDelete: true
     });
   }
+
+  function applyLiveCenter(lat, lng) {
+    if (pendingNew) {
+      pendingNew.circle.setLatLng([lat, lng]);
+      pendingNew.moveHandle.setLatLng([lat, lng]);
+      pendingNew.handle.setLatLng(handlePositionFor(lat, lng, pendingNew.circle.getRadius()));
+    } else if (activeMarkerId) {
+      var entry = layers.get(activeMarkerId);
+      if (entry) {
+        entry.circle.setLatLng([lat, lng]);
+        if (entry.moveHandle) entry.moveHandle.setLatLng([lat, lng]);
+        if (entry.handle) entry.handle.setLatLng(handlePositionFor(lat, lng, entry.circle.getRadius()));
+      }
+    }
+  }
+
+  coordsInput.addEventListener('input', function () {
+    var parsed = parseCoords(coordsInput.value);
+    if (!parsed) {
+      coordsInput.classList.add('input-invalid');
+      return;
+    }
+    coordsInput.classList.remove('input-invalid');
+    applyLiveCenter(parsed.lat, parsed.lng);
+  });
 
   radiusInput.addEventListener('input', function () {
     var val = Number(radiusInput.value);
@@ -566,7 +612,11 @@
       var markerData = markers.find(function (m) { return m.id === activeMarkerId; });
       var entry = layers.get(activeMarkerId);
       if (markerData && entry) {
+        entry.circle.setLatLng([markerData.centerLat, markerData.centerLng]);
         entry.circle.setRadius(markerData.radiusMeters);
+        if (entry.moveHandle) {
+          entry.moveHandle.setLatLng([markerData.centerLat, markerData.centerLng]);
+        }
         if (entry.handle) {
           entry.handle.setLatLng(handlePositionFor(markerData.centerLat, markerData.centerLng, markerData.radiusMeters));
         }
@@ -606,10 +656,14 @@
       updateEmptyState();
     } else if (activeMarkerId) {
       var markerData = markers.find(function (m) { return m.id === activeMarkerId; });
-      if (markerData) {
+      var entry = layers.get(activeMarkerId);
+      if (markerData && entry) {
+        var finalCenter = entry.circle.getLatLng();
         markerData.label = label;
         markerData.category = category;
         markerData.radiusMeters = radius;
+        markerData.centerLat = finalCenter.lat;
+        markerData.centerLng = finalCenter.lng;
         persistMarkers();
         redrawSingleMarker(markerData.id);
       }
