@@ -82,6 +82,8 @@
   var currentLocationMarker = null;
   var watchId = null;
   var pendingDeleteId = null;
+  var currentSearchMatches = [];
+  var searchActiveIndex = -1;
 
   // ---------- Map init ----------
   var savedView = loadView();
@@ -110,6 +112,8 @@
   var editHint = document.getElementById('edit-hint');
   var locateBtn = document.getElementById('locate-btn');
   var locationMsg = document.getElementById('location-msg');
+  var searchInput = document.getElementById('search-input');
+  var searchResults = document.getElementById('search-results');
 
   var formOverlay = document.getElementById('marker-form-overlay');
   var formTitle = document.getElementById('marker-form-title');
@@ -783,6 +787,143 @@
 
   locateBtn.addEventListener('click', function () {
     requestLocation(true);
+  });
+
+  // ---------- Search ----------
+  function searchMarkers(query) {
+    var q = query.trim().toLowerCase();
+    if (!q) return [];
+    var startsWith = [];
+    var contains = [];
+    markers.forEach(function (m) {
+      var label = m.label.toLowerCase();
+      var idx = label.indexOf(q);
+      if (idx === 0) {
+        startsWith.push(m);
+      } else if (idx > 0) {
+        contains.push(m);
+      }
+    });
+    return startsWith.concat(contains).slice(0, 8);
+  }
+
+  function updateSearchActiveHighlight() {
+    var items = searchResults.querySelectorAll('.search-result-item');
+    items.forEach(function (item, idx) {
+      item.classList.toggle('active', idx === searchActiveIndex);
+    });
+  }
+
+  function hideSearchResults() {
+    searchResults.classList.add('hidden');
+    searchResults.innerHTML = '';
+    currentSearchMatches = [];
+    searchActiveIndex = -1;
+  }
+
+  function selectSearchResult(markerData) {
+    var entry = layers.get(markerData.id);
+    if (entry) {
+      map.fitBounds(entry.circle.getBounds(), { padding: [80, 80], maxZoom: 17 });
+      if (!editMode) {
+        entry.circle.openPopup();
+      }
+    } else {
+      map.setView([markerData.centerLat, markerData.centerLng], Math.max(map.getZoom(), 15));
+    }
+    searchInput.value = '';
+    hideSearchResults();
+    searchInput.blur();
+  }
+
+  function renderSearchResults(matches) {
+    currentSearchMatches = matches;
+    searchActiveIndex = -1;
+    searchResults.innerHTML = '';
+
+    if (matches.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'search-result-empty';
+      empty.textContent = 'No matching points';
+      searchResults.appendChild(empty);
+    } else {
+      matches.forEach(function (m, idx) {
+        var item = document.createElement('div');
+        item.className = 'search-result-item';
+        item.dataset.index = idx;
+
+        var swatch = document.createElement('span');
+        swatch.className = 'search-result-swatch';
+        swatch.style.background = categoryColor(m.category);
+
+        var label = document.createElement('span');
+        label.className = 'search-result-label';
+        label.textContent = m.label;
+
+        var cat = document.createElement('span');
+        cat.className = 'search-result-category';
+        cat.textContent = CATEGORY_LABELS[m.category];
+
+        item.appendChild(swatch);
+        item.appendChild(label);
+        item.appendChild(cat);
+
+        item.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          selectSearchResult(m);
+        });
+
+        searchResults.appendChild(item);
+      });
+    }
+
+    searchResults.classList.remove('hidden');
+  }
+
+  searchInput.addEventListener('input', function () {
+    var value = searchInput.value;
+    if (!value.trim()) {
+      hideSearchResults();
+      return;
+    }
+    renderSearchResults(searchMarkers(value));
+  });
+
+  searchInput.addEventListener('focus', function () {
+    if (searchInput.value.trim()) {
+      renderSearchResults(searchMarkers(searchInput.value));
+    }
+  });
+
+  searchInput.addEventListener('keydown', function (e) {
+    if (searchResults.classList.contains('hidden')) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (currentSearchMatches.length === 0) return;
+      searchActiveIndex = (searchActiveIndex + 1) % currentSearchMatches.length;
+      updateSearchActiveHighlight();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (currentSearchMatches.length === 0) return;
+      searchActiveIndex = (searchActiveIndex - 1 + currentSearchMatches.length) % currentSearchMatches.length;
+      updateSearchActiveHighlight();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (searchActiveIndex >= 0 && currentSearchMatches[searchActiveIndex]) {
+        selectSearchResult(currentSearchMatches[searchActiveIndex]);
+      } else if (currentSearchMatches.length === 1) {
+        selectSearchResult(currentSearchMatches[0]);
+      }
+    } else if (e.key === 'Escape') {
+      searchInput.value = '';
+      hideSearchResults();
+      searchInput.blur();
+    }
+  });
+
+  searchInput.addEventListener('blur', function () {
+    setTimeout(hideSearchResults, 100);
   });
 
   // ---------- Init ----------
