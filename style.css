@@ -280,6 +280,21 @@ html, body {
   cursor: ew-resize;
 }
 
+.move-handle-icon {
+  background: transparent;
+  border: none;
+}
+
+.move-handle {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #1a5fb4;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: move;
+}
+
 .current-location-icon {
   background: transparent;
   border: none;

@@ -173,6 +173,7 @@
     layers.forEach(function (entry) {
       map.removeLayer(entry.circle);
       if (entry.handle) map.removeLayer(entry.handle);
+      if (entry.moveHandle) map.removeLayer(entry.moveHandle);
     });
     layers.clear();
   }
@@ -204,13 +205,14 @@
       circle.bindPopup(popupContentFor(markerData));
     }
 
-    var entry = { circle: circle, handle: null };
+    var entry = { circle: circle, handle: null, moveHandle: null };
     layers.set(markerData.id, entry);
 
     attachCircleInteractions(markerData.id, circle);
 
     if (editMode) {
       addResizeHandle(markerData.id);
+      addMoveHandle(markerData.id);
     }
 
     return entry;
@@ -221,6 +223,7 @@
     if (entry) {
       map.removeLayer(entry.circle);
       if (entry.handle) map.removeLayer(entry.handle);
+      if (entry.moveHandle) map.removeLayer(entry.moveHandle);
       layers.delete(markerId);
     }
     var markerData = markers.find(function (m) { return m.id === markerId; });
@@ -267,6 +270,48 @@
     if (entry && entry.handle) {
       map.removeLayer(entry.handle);
       entry.handle = null;
+    }
+  }
+
+  function addMoveHandle(markerId) {
+    var entry = layers.get(markerId);
+    if (!entry) return;
+    var markerData = markers.find(function (m) { return m.id === markerId; });
+    if (!markerData) return;
+    var moveIcon = L.divIcon({
+      className: 'move-handle-icon',
+      html: '<div class="move-handle"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+    var moveHandle = L.marker([markerData.centerLat, markerData.centerLng], {
+      icon: moveIcon,
+      draggable: true
+    }).addTo(map);
+
+    moveHandle.on('drag', function () {
+      var newCenter = moveHandle.getLatLng();
+      entry.circle.setLatLng(newCenter);
+      if (entry.handle) {
+        entry.handle.setLatLng(handlePositionFor(newCenter.lat, newCenter.lng, markerData.radiusMeters));
+      }
+    });
+
+    moveHandle.on('dragend', function () {
+      var newCenter = moveHandle.getLatLng();
+      markerData.centerLat = newCenter.lat;
+      markerData.centerLng = newCenter.lng;
+      persistMarkers();
+    });
+
+    entry.moveHandle = moveHandle;
+  }
+
+  function removeMoveHandle(markerId) {
+    var entry = layers.get(markerId);
+    if (entry && entry.moveHandle) {
+      map.removeLayer(entry.moveHandle);
+      entry.moveHandle = null;
     }
   }
 
@@ -327,9 +372,11 @@
         entry.circle.closePopup();
         entry.circle.unbindPopup();
         addResizeHandle(markerId);
+        addMoveHandle(markerId);
       } else {
         if (markerData) entry.circle.bindPopup(popupContentFor(markerData));
         removeResizeHandle(markerId);
+        removeMoveHandle(markerId);
       }
     });
 
@@ -362,6 +409,7 @@
     if (pendingNew) {
       map.removeLayer(pendingNew.circle);
       map.removeLayer(pendingNew.handle);
+      map.removeLayer(pendingNew.moveHandle);
       pendingNew = null;
     }
     setEditHint(null);
@@ -420,12 +468,27 @@
       radiusValue.textContent = Math.round(finalRadius) + ' m';
     });
 
+    var moveIcon = L.divIcon({
+      className: 'move-handle-icon',
+      html: '<div class="move-handle"></div>',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+    var moveHandle = L.marker(e.latlng, { icon: moveIcon, draggable: true }).addTo(map);
+
+    moveHandle.on('drag', function () {
+      var newCenter = moveHandle.getLatLng();
+      circle.setLatLng(newCenter);
+      handle.setLatLng(handlePositionFor(newCenter.lat, newCenter.lng, circle.getRadius()));
+    });
+
     circle.on('mousedown', function (ev) {
       L.DomEvent.stopPropagation(ev);
       map.dragging.disable();
       function onMove(mv) {
         circle.setLatLng(mv.latlng);
         handle.setLatLng(handlePositionFor(mv.latlng.lat, mv.latlng.lng, circle.getRadius()));
+        moveHandle.setLatLng(mv.latlng);
       }
       function onUp() {
         map.off('mousemove', onMove);
@@ -436,7 +499,7 @@
       map.on('mouseup', onUp);
     });
 
-    pendingNew = { circle: circle, handle: handle, category: category };
+    pendingNew = { circle: circle, handle: handle, moveHandle: moveHandle, category: category };
     activeMarkerId = null;
     openMarkerForm({
       title: 'New ' + CATEGORY_LABELS[category],
@@ -535,6 +598,7 @@
       };
       map.removeLayer(pendingNew.circle);
       map.removeLayer(pendingNew.handle);
+      map.removeLayer(pendingNew.moveHandle);
       pendingNew = null;
       markers.push(newMarker);
       persistMarkers();
