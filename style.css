@@ -37,26 +37,19 @@ html, body {
   pointer-events: none;
 }
 
-#app-title {
-  background: rgba(255, 255, 255, 0.92);
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-  pointer-events: auto;
-  flex-shrink: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 #top-actions {
   display: flex;
   gap: 8px;
   pointer-events: auto;
   flex-shrink: 0;
+}
+
+#top-actions-spacer {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* Search */
@@ -200,23 +193,10 @@ html, body {
 
 #edit-toolbar.hidden { display: none; }
 
-.category-anchorage {
-  border-left: 4px solid var(--anchorage-color);
-}
-
-.category-pickup {
-  border-left: 4px solid var(--pickup-color);
-}
-
 #edit-hint {
   font-size: 12px;
   color: #666;
   max-width: 200px;
-}
-
-#edit-hint.active {
-  color: #1a5fb4;
-  font-weight: 600;
 }
 
 /* Toast */
@@ -273,7 +253,8 @@ html, body {
   margin-top: 12px;
 }
 
-.modal input[type="text"] {
+.modal input[type="text"],
+.modal input[type="number"] {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid #ccc;
@@ -283,16 +264,6 @@ html, body {
 
 .modal input[type="text"].input-invalid {
   border-color: var(--danger-color);
-}
-
-.modal input[type="range"] {
-  width: 100%;
-}
-
-#marker-radius-value {
-  font-size: 12px;
-  color: #666;
-  text-align: right;
 }
 
 .category-select {
@@ -412,7 +383,6 @@ html, body {
 }
 
 @media (max-width: 480px) {
-  #app-title { font-size: 12px; padding: 6px 10px; }
   .btn { padding: 8px 10px; font-size: 13px; }
   #search-input { padding: 8px 10px; font-size: 13px; }
 }

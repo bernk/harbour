@@ -14,7 +14,10 @@
 <div id="map"></div>
 
 <div id="top-bar">
-  <div id="app-title">Vancouver Harbour Anchorages</div>
+  <div id="top-actions-spacer" aria-hidden="true">
+    <span class="icon-btn"></span>
+    <span class="btn">Edit Mode</span>
+  </div>
   <div id="search-wrap">
     <input type="text" id="search-input" placeholder="Search points…" autocomplete="off" />
     <div id="search-results" class="hidden"></div>
@@ -26,11 +29,10 @@
 </div>
 
 <div id="edit-toolbar" class="hidden">
-  <button id="draw-anchorage-btn" class="btn category-anchorage">+ Anchorage</button>
-  <button id="draw-pickup-btn" class="btn category-pickup">+ Pick-up / Drop-off</button>
   <button id="import-csv-btn" class="btn">Import CSV</button>
   <input type="file" id="import-csv-file" accept=".csv,text/csv" class="hidden" />
-  <div id="edit-hint">Click the map to place a circle</div>
+  <button id="delete-all-btn" class="btn btn-danger">Delete All</button>
+  <div id="edit-hint">Click the map to add a new point</div>
 </div>
 
 <div id="location-msg" class="toast hidden"></div>
@@ -57,8 +59,7 @@
     </div>
 
     <label for="marker-radius-input">Radius (meters)</label>
-    <input type="range" id="marker-radius-input" min="10" max="2000" value="150" />
-    <div id="marker-radius-value">150 m</div>
+    <input type="number" id="marker-radius-input" min="10" max="1000" step="1" value="350" />
 
     <div class="modal-actions">
       <button id="marker-form-delete" class="btn btn-danger hidden">Delete</button>
@@ -72,7 +73,7 @@
 
 <div id="confirm-overlay" class="overlay hidden">
   <div class="modal">
-    <h3>Delete this marker?</h3>
+    <h3 id="confirm-title">Delete this marker?</h3>
     <p id="confirm-text">This action cannot be undone.</p>
     <div class="modal-actions">
       <div class="modal-actions-right">

@@ -118,13 +118,13 @@
   // ---------- State ----------
   var markers = loadMarkers();
   var editMode = false;
-  var drawCategory = null;
   var activeMarkerId = null;
   var pendingNew = null;
   var layers = new Map();
   var currentLocationMarker = null;
   var watchId = null;
   var pendingDeleteId = null;
+  var pendingDeleteAll = false;
   var currentSearchMatches = [];
   var searchActiveIndex = -1;
 
@@ -150,11 +150,9 @@
   // ---------- DOM refs ----------
   var modeToggleBtn = document.getElementById('mode-toggle');
   var editToolbar = document.getElementById('edit-toolbar');
-  var drawAnchorageBtn = document.getElementById('draw-anchorage-btn');
-  var drawPickupBtn = document.getElementById('draw-pickup-btn');
   var importCsvBtn = document.getElementById('import-csv-btn');
   var importCsvFile = document.getElementById('import-csv-file');
-  var editHint = document.getElementById('edit-hint');
+  var deleteAllBtn = document.getElementById('delete-all-btn');
   var locateBtn = document.getElementById('locate-btn');
   var locationMsg = document.getElementById('location-msg');
   var searchInput = document.getElementById('search-input');
@@ -165,12 +163,12 @@
   var labelInput = document.getElementById('marker-label-input');
   var coordsInput = document.getElementById('marker-coords-input');
   var radiusInput = document.getElementById('marker-radius-input');
-  var radiusValue = document.getElementById('marker-radius-value');
   var formDeleteBtn = document.getElementById('marker-form-delete');
   var formCancelBtn = document.getElementById('marker-form-cancel');
   var formSaveBtn = document.getElementById('marker-form-save');
 
   var confirmOverlay = document.getElementById('confirm-overlay');
+  var confirmTitle = document.getElementById('confirm-title');
   var confirmText = document.getElementById('confirm-text');
   var confirmCancelBtn = document.getElementById('confirm-cancel');
   var confirmOkBtn = document.getElementById('confirm-ok');
@@ -380,6 +378,10 @@
   }
 
   function attachCircleInteractions(markerId, circle) {
+    circle.on('click', function (e) {
+      L.DomEvent.stopPropagation(e);
+    });
+
     circle.on('mousedown', function (e) {
       if (!editMode) return;
       L.DomEvent.stopPropagation(e);
@@ -427,8 +429,7 @@
     modeToggleBtn.textContent = on ? 'View Mode' : 'Edit Mode';
     modeToggleBtn.classList.toggle('active', on);
     editToolbar.classList.toggle('hidden', !on);
-    cancelDrawing();
-    setEditHint(null);
+    cancelPendingNew();
 
     layers.forEach(function (entry, markerId) {
       var markerData = markers.find(function (m) { return m.id === markerId; });
@@ -452,39 +453,14 @@
   });
 
   // ---------- Drawing new markers ----------
-  function setEditHint(text) {
-    if (text) {
-      editHint.textContent = text;
-      editHint.classList.add('active');
-    } else {
-      editHint.textContent = 'Click the map to place a circle';
-      editHint.classList.remove('active');
-    }
-  }
-
-  function startDrawing(category) {
-    cancelDrawing();
-    drawCategory = category;
-    setEditHint('Click the map to place a new ' + CATEGORY_LABELS[category] + ' circle');
-  }
-
-  function cancelDrawing() {
-    drawCategory = null;
+  function cancelPendingNew() {
     if (pendingNew) {
       map.removeLayer(pendingNew.circle);
       map.removeLayer(pendingNew.handle);
       map.removeLayer(pendingNew.moveHandle);
       pendingNew = null;
     }
-    setEditHint(null);
   }
-
-  drawAnchorageBtn.addEventListener('click', function () {
-    startDrawing('anchorage');
-  });
-  drawPickupBtn.addEventListener('click', function () {
-    startDrawing('pickupDropoff');
-  });
 
   // ---------- CSV import ----------
   function importCsvText(text) {
@@ -573,12 +549,9 @@
   });
 
   map.on('click', function (e) {
-    if (!editMode || !drawCategory) return;
+    if (!editMode || pendingNew) return;
 
-    var category = drawCategory;
-    drawCategory = null;
-    setEditHint(null);
-
+    var category = 'anchorage';
     var color = categoryColor(category);
     var circle = L.circle(e.latlng, {
       radius: DEFAULT_RADIUS,
@@ -606,7 +579,6 @@
       var clamped = Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, newRadius));
       circle.setRadius(clamped);
       radiusInput.value = Math.round(clamped);
-      radiusValue.textContent = Math.round(clamped) + ' m';
     });
 
     handle.on('dragend', function () {
@@ -615,7 +587,6 @@
       circle.setRadius(finalRadius);
       handle.setLatLng(handlePositionFor(center.lat, center.lng, finalRadius));
       radiusInput.value = Math.round(finalRadius);
-      radiusValue.textContent = Math.round(finalRadius) + ' m';
     });
 
     var moveIcon = L.divIcon({
@@ -668,8 +639,7 @@
     labelInput.value = opts.label || '';
     coordsInput.value = formatCoords(opts.lat, opts.lng);
     coordsInput.classList.remove('input-invalid');
-    radiusInput.value = opts.radius;
-    radiusValue.textContent = Math.round(opts.radius) + ' m';
+    radiusInput.value = Math.round(opts.radius);
     var radios = document.getElementsByName('category');
     for (var i = 0; i < radios.length; i++) {
       radios[i].checked = radios[i].value === opts.category;
@@ -724,8 +694,10 @@
   });
 
   radiusInput.addEventListener('input', function () {
-    var val = Number(radiusInput.value);
-    radiusValue.textContent = val + ' m';
+    var raw = Number(radiusInput.value);
+    if (!isFinite(raw) || raw <= 0) return;
+    var val = Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, raw));
+
     if (pendingNew) {
       pendingNew.circle.setRadius(val);
       var c1 = pendingNew.circle.getLatLng();
@@ -742,7 +714,7 @@
 
   formCancelBtn.addEventListener('click', function () {
     if (pendingNew) {
-      cancelDrawing();
+      cancelPendingNew();
     } else if (activeMarkerId) {
       var markerData = markers.find(function (m) { return m.id === activeMarkerId; });
       var entry = layers.get(activeMarkerId);
@@ -813,6 +785,8 @@
     if (!activeMarkerId) return;
     var markerData = markers.find(function (m) { return m.id === activeMarkerId; });
     pendingDeleteId = activeMarkerId;
+    pendingDeleteAll = false;
+    confirmTitle.textContent = 'Delete this marker?';
     confirmText.textContent = markerData
       ? 'Delete "' + markerData.label + '"? This action cannot be undone.'
       : 'This action cannot be undone.';
@@ -821,14 +795,18 @@
 
   confirmCancelBtn.addEventListener('click', function () {
     pendingDeleteId = null;
+    pendingDeleteAll = false;
     confirmOverlay.classList.add('hidden');
   });
 
   confirmOkBtn.addEventListener('click', function () {
-    if (pendingDeleteId) {
+    if (pendingDeleteAll) {
+      deleteAllMarkers();
+    } else if (pendingDeleteId) {
       deleteMarker(pendingDeleteId);
     }
     pendingDeleteId = null;
+    pendingDeleteAll = false;
     confirmOverlay.classList.add('hidden');
     activeMarkerId = null;
     closeMarkerForm();
@@ -839,12 +817,32 @@
     if (entry) {
       map.removeLayer(entry.circle);
       if (entry.handle) map.removeLayer(entry.handle);
+      if (entry.moveHandle) map.removeLayer(entry.moveHandle);
       layers.delete(markerId);
     }
     markers = markers.filter(function (m) { return m.id !== markerId; });
     persistMarkers();
     updateEmptyState();
   }
+
+  function deleteAllMarkers() {
+    clearAllLayers();
+    markers = [];
+    persistMarkers();
+    updateEmptyState();
+  }
+
+  deleteAllBtn.addEventListener('click', function () {
+    if (markers.length === 0) {
+      showToast('There are no points to delete.', 3000);
+      return;
+    }
+    pendingDeleteId = null;
+    pendingDeleteAll = true;
+    confirmTitle.textContent = 'Delete all points?';
+    confirmText.textContent = 'Delete all ' + markers.length + ' saved point' + (markers.length === 1 ? '' : 's') + '? This action cannot be undone.';
+    confirmOverlay.classList.remove('hidden');
+  });
 
   // ---------- Empty state ----------
   function updateEmptyState() {
