@@ -8,6 +8,7 @@
   var MIN_RADIUS = 10;
   var MAX_RADIUS = 1000;
   var DEFAULT_RADIUS = 350;
+  var DEFAULT_IMPORT_RADIUS = 300;
   var DRAG_THRESHOLD_METERS = 3;
 
   var CATEGORY_COLORS = {
@@ -72,6 +73,48 @@
     return div.innerHTML;
   }
 
+  function parseCsv(text) {
+    var rows = [];
+    var row = [];
+    var field = '';
+    var inQuotes = false;
+
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            field += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          field += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        row.push(field);
+        field = '';
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = '';
+      } else {
+        field += ch;
+      }
+    }
+    if (field.length > 0 || row.length > 0) {
+      row.push(field);
+      rows.push(row);
+    }
+
+    return rows.filter(function (r) { return !(r.length === 1 && r[0].trim() === ''); });
+  }
+
   // ---------- State ----------
   var markers = loadMarkers();
   var editMode = false;
@@ -109,6 +152,8 @@
   var editToolbar = document.getElementById('edit-toolbar');
   var drawAnchorageBtn = document.getElementById('draw-anchorage-btn');
   var drawPickupBtn = document.getElementById('draw-pickup-btn');
+  var importCsvBtn = document.getElementById('import-csv-btn');
+  var importCsvFile = document.getElementById('import-csv-file');
   var editHint = document.getElementById('edit-hint');
   var locateBtn = document.getElementById('locate-btn');
   var locationMsg = document.getElementById('location-msg');
@@ -439,6 +484,92 @@
   });
   drawPickupBtn.addEventListener('click', function () {
     startDrawing('pickupDropoff');
+  });
+
+  // ---------- CSV import ----------
+  function importCsvText(text) {
+    var rows = parseCsv(text);
+    if (rows.length <= 1) {
+      showToast('The CSV has no data rows to import.', 4000);
+      return;
+    }
+
+    var header = rows[0].map(function (h) { return h.trim().toLowerCase(); });
+    var labelIdx = header.indexOf('anchorage');
+    var latIdx = header.indexOf('latitude');
+    var lngIdx = header.indexOf('longitude');
+    var radiusIdx = header.indexOf('radius');
+
+    if (labelIdx === -1 || latIdx === -1 || lngIdx === -1) {
+      showToast('CSV must have Anchorage, Latitude, and Longitude columns.', 5000);
+      return;
+    }
+
+    var imported = 0;
+    var skipped = 0;
+    var newMarkers = [];
+
+    for (var i = 1; i < rows.length; i++) {
+      var cols = rows[i];
+      if (cols.length === 1 && cols[0].trim() === '') continue;
+
+      var label = (cols[labelIdx] || '').trim();
+      var lat = parseFloat(cols[latIdx]);
+      var lng = parseFloat(cols[lngIdx]);
+      var radius = DEFAULT_IMPORT_RADIUS;
+      if (radiusIdx !== -1 && cols[radiusIdx] !== undefined && cols[radiusIdx].trim() !== '') {
+        var parsedRadius = parseFloat(cols[radiusIdx]);
+        if (isFinite(parsedRadius)) radius = parsedRadius;
+      }
+      radius = Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, radius));
+
+      var valid = label && isFinite(lat) && isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+      if (!valid) {
+        skipped++;
+        continue;
+      }
+
+      newMarkers.push({
+        id: uuid(),
+        label: label,
+        category: 'anchorage',
+        centerLat: lat,
+        centerLng: lng,
+        radiusMeters: radius,
+        createdAt: new Date().toISOString()
+      });
+      imported++;
+    }
+
+    if (newMarkers.length > 0) {
+      markers = markers.concat(newMarkers);
+      persistMarkers();
+      renderAll();
+    }
+
+    var msg = 'Imported ' + imported + ' point' + (imported === 1 ? '' : 's') + '.';
+    if (skipped > 0) {
+      msg += ' Skipped ' + skipped + ' invalid row' + (skipped === 1 ? '' : 's') + '.';
+    }
+    showToast(msg, 5000);
+  }
+
+  importCsvBtn.addEventListener('click', function () {
+    importCsvFile.value = '';
+    importCsvFile.click();
+  });
+
+  importCsvFile.addEventListener('change', function () {
+    var file = importCsvFile.files && importCsvFile.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      importCsvText(String(e.target.result));
+    };
+    reader.onerror = function () {
+      showToast('Failed to read the CSV file.', 4000);
+    };
+    reader.readAsText(file);
   });
 
   map.on('click', function (e) {
