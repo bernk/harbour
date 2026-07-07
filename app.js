@@ -473,6 +473,7 @@
     var labelIdx = header.indexOf('anchorage');
     var latIdx = header.indexOf('latitude');
     var lngIdx = header.indexOf('longitude');
+    var diameterIdx = header.indexOf('diameter');
     var radiusIdx = header.indexOf('radius');
 
     if (labelIdx === -1 || latIdx === -1 || lngIdx === -1) {
@@ -492,7 +493,10 @@
       var lat = parseFloat(cols[latIdx]);
       var lng = parseFloat(cols[lngIdx]);
       var radius = DEFAULT_IMPORT_RADIUS;
-      if (radiusIdx !== -1 && cols[radiusIdx] !== undefined && cols[radiusIdx].trim() !== '') {
+      if (diameterIdx !== -1 && cols[diameterIdx] !== undefined && cols[diameterIdx].trim() !== '') {
+        var parsedDiameter = parseFloat(cols[diameterIdx]);
+        if (isFinite(parsedDiameter)) radius = parsedDiameter / 2;
+      } else if (radiusIdx !== -1 && cols[radiusIdx] !== undefined && cols[radiusIdx].trim() !== '') {
         var parsedRadius = parseFloat(cols[radiusIdx]);
         if (isFinite(parsedRadius)) radius = parsedRadius;
       }
@@ -557,13 +561,13 @@
   }
 
   function buildCsv() {
-    var lines = ['Anchorage,Latitude,Longitude,Radius,Category'];
+    var lines = ['Anchorage,Latitude,Longitude,Diameter,Category'];
     markers.forEach(function (m) {
       lines.push([
         csvField(m.label),
         m.centerLat.toFixed(6),
         m.centerLng.toFixed(6),
-        Math.round(m.radiusMeters),
+        Math.round(m.radiusMeters * 2),
         m.category
       ].join(','));
     });
