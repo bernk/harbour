@@ -37,19 +37,15 @@ html, body {
   pointer-events: none;
 }
 
-#top-actions {
+/* Bottom-right action stack (replaces the Leaflet zoom control) */
+#corner-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 28px;
+  z-index: 1000;
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  pointer-events: auto;
-  flex-shrink: 0;
-}
-
-#top-actions-spacer {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-  visibility: hidden;
-  pointer-events: none;
 }
 
 /* Search */
@@ -162,10 +158,13 @@ html, body {
   border-radius: 8px;
   width: 38px;
   height: 38px;
-  font-size: 16px;
   background: #ffffff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   cursor: pointer;
+  color: #2d2d2d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-btn:hover { background: #f2f2f2; }

@@ -135,8 +135,6 @@
     savedView ? savedView.zoom : DEFAULT_ZOOM
   );
 
-  L.control.zoom({ position: 'bottomright' }).addTo(map);
-
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     maxZoom: 19,
@@ -426,7 +424,7 @@
   // ---------- Mode toggle ----------
   function setEditMode(on) {
     editMode = on;
-    modeToggleBtn.textContent = on ? 'View Mode' : 'Edit Mode';
+    modeToggleBtn.title = on ? 'Exit Edit Mode' : 'Edit Mode';
     modeToggleBtn.classList.toggle('active', on);
     editToolbar.classList.toggle('hidden', !on);
     cancelPendingNew();
