@@ -150,6 +150,7 @@
   var editToolbar = document.getElementById('edit-toolbar');
   var importCsvBtn = document.getElementById('import-csv-btn');
   var importCsvFile = document.getElementById('import-csv-file');
+  var exportCsvBtn = document.getElementById('export-csv-btn');
   var deleteAllBtn = document.getElementById('delete-all-btn');
   var locateBtn = document.getElementById('locate-btn');
   var locationMsg = document.getElementById('location-msg');
@@ -544,6 +545,46 @@
       showToast('Failed to read the CSV file.', 4000);
     };
     reader.readAsText(file);
+  });
+
+  // ---------- CSV export ----------
+  function csvField(value) {
+    var str = String(value);
+    if (/[",\n\r]/.test(str)) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  }
+
+  function buildCsv() {
+    var lines = ['Anchorage,Latitude,Longitude,Radius,Category'];
+    markers.forEach(function (m) {
+      lines.push([
+        csvField(m.label),
+        m.centerLat.toFixed(6),
+        m.centerLng.toFixed(6),
+        Math.round(m.radiusMeters),
+        m.category
+      ].join(','));
+    });
+    return lines.join('\r\n') + '\r\n';
+  }
+
+  exportCsvBtn.addEventListener('click', function () {
+    if (markers.length === 0) {
+      showToast('There are no points to export.', 3000);
+      return;
+    }
+    var blob = new Blob([buildCsv()], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'anchorages-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Exported ' + markers.length + ' point' + (markers.length === 1 ? '' : 's') + '.', 4000);
   });
 
   map.on('click', function (e) {
