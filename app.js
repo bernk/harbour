@@ -250,7 +250,7 @@
     var circle = L.circle([markerData.centerLat, markerData.centerLng], {
       radius: markerData.radiusMeters,
       color: color,
-      weight: 2,
+      weight: 1,
       fillColor: color,
       fillOpacity: 0.18
     }).addTo(map);
@@ -996,7 +996,7 @@
   function selectSearchResult(markerData) {
     var entry = layers.get(markerData.id);
     if (entry) {
-      map.fitBounds(entry.circle.getBounds(), { padding: [80, 80], maxZoom: 17 });
+      map.fitBounds(entry.circle.getBounds(), { padding: [80, 80], maxZoom: 15 });
       if (!editMode) {
         entry.circle.openPopup();
       }
@@ -1101,4 +1101,9 @@
   // ---------- Init ----------
   renderAll();
   requestLocation(false);
+
+  if (sessionStorage.getItem('__ANCHORAGES_DEBUG__') === '1') {
+    window.__importCsvText = importCsvText;
+    window.__buildCsv = buildCsv;
+  }
 })();
