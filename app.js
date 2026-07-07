@@ -3,6 +3,7 @@
 
   var STORAGE_KEY_MARKERS = 'vancouver-anchorages-markers';
   var STORAGE_KEY_VIEW = 'vancouver-anchorages-view';
+  var STORAGE_KEY_BASEMAP = 'vancouver-anchorages-basemap';
   var DEFAULT_CENTER = [49.2937, -123.1200];
   var DEFAULT_ZOOM = 13;
   var MIN_RADIUS = 10;
@@ -135,11 +136,27 @@
     savedView ? savedView.zoom : DEFAULT_ZOOM
   );
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     maxZoom: 19,
     subdomains: 'abcd'
-  }).addTo(map);
+  });
+
+  var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+    maxZoom: 19
+  });
+
+  function loadBasemap() {
+    try {
+      return localStorage.getItem(STORAGE_KEY_BASEMAP) === 'satellite' ? 'satellite' : 'streets';
+    } catch (e) {
+      return 'streets';
+    }
+  }
+
+  var currentBasemap = loadBasemap();
+  (currentBasemap === 'satellite' ? satelliteLayer : streetsLayer).addTo(map);
 
   map.on('moveend', function () {
     persistView(map.getCenter(), map.getZoom());
@@ -148,6 +165,7 @@
   // ---------- DOM refs ----------
   var modeToggleBtn = document.getElementById('mode-toggle');
   var editToolbar = document.getElementById('edit-toolbar');
+  var basemapToggleBtn = document.getElementById('basemap-toggle-btn');
   var importCsvBtn = document.getElementById('import-csv-btn');
   var importCsvFile = document.getElementById('import-csv-file');
   var exportCsvBtn = document.getElementById('export-csv-btn');
@@ -425,7 +443,7 @@
   // ---------- Mode toggle ----------
   function setEditMode(on) {
     editMode = on;
-    modeToggleBtn.title = on ? 'Exit Edit Mode' : 'Edit Mode';
+    modeToggleBtn.title = on ? 'Close Settings' : 'Settings';
     modeToggleBtn.classList.toggle('active', on);
     editToolbar.classList.toggle('hidden', !on);
     cancelPendingNew();
@@ -450,6 +468,35 @@
   modeToggleBtn.addEventListener('click', function () {
     setEditMode(!editMode);
   });
+
+  // ---------- Basemap toggle ----------
+  function updateBasemapButtonLabel() {
+    basemapToggleBtn.textContent = currentBasemap === 'satellite' ? 'View: Satellite' : 'View: Map';
+  }
+
+  function setBasemap(name) {
+    if (name === currentBasemap) return;
+    if (name === 'satellite') {
+      map.removeLayer(streetsLayer);
+      satelliteLayer.addTo(map);
+    } else {
+      map.removeLayer(satelliteLayer);
+      streetsLayer.addTo(map);
+    }
+    currentBasemap = name;
+    try {
+      localStorage.setItem(STORAGE_KEY_BASEMAP, name);
+    } catch (e) {
+      console.error('Failed to save basemap preference', e);
+    }
+    updateBasemapButtonLabel();
+  }
+
+  basemapToggleBtn.addEventListener('click', function () {
+    setBasemap(currentBasemap === 'satellite' ? 'streets' : 'satellite');
+  });
+
+  updateBasemapButtonLabel();
 
   // ---------- Drawing new markers ----------
   function cancelPendingNew() {
