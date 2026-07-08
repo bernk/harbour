@@ -155,7 +155,7 @@
 
   // ---------- Map init ----------
   var savedView = loadView();
-  var map = L.map('map', { zoomControl: false}).setView(
+  var map = L.map('map', { zoomControl: false, attributionControl: false }).setView(
     savedView ? [savedView.lat, savedView.lng] : DEFAULT_CENTER,
     savedView ? savedView.zoom : DEFAULT_ZOOM
   );
