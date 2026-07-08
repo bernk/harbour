@@ -145,6 +145,7 @@
   var layers = new Map();
   var currentLocationMarker = null;
   var watchId = null;
+  var lastKnownFix = null;
   var pendingDeleteId = null;
   var pendingDeleteAll = false;
   var currentSearchMatches = [];
@@ -154,7 +155,7 @@
 
   // ---------- Map init ----------
   var savedView = loadView();
-  var map = L.map('map', { zoomControl: false }).setView(
+  var map = L.map('map', { zoomControl: false}).setView(
     savedView ? [savedView.lat, savedView.lng] : DEFAULT_CENTER,
     savedView ? savedView.zoom : DEFAULT_ZOOM
   );
@@ -164,6 +165,7 @@
     maxZoom: 19,
     subdomains: 'abcd'
   });
+
 
   var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
@@ -1007,10 +1009,15 @@
     }
   }
 
+  function rememberFix(pos) {
+    lastKnownFix = { lat: pos.coords.latitude, lng: pos.coords.longitude, at: Date.now() };
+  }
+
   function startWatching() {
     if (watchId !== null || !('geolocation' in navigator)) return;
     watchId = navigator.geolocation.watchPosition(
       function (pos) {
+        rememberFix(pos);
         updateCurrentLocationMarker(pos.coords.latitude, pos.coords.longitude);
       },
       function () {},
@@ -1027,6 +1034,7 @@
     navigator.geolocation.getCurrentPosition(
       function (pos) {
         delete locationMsg.dataset.kind;
+        rememberFix(pos);
         updateCurrentLocationMarker(pos.coords.latitude, pos.coords.longitude);
         if (panTo) {
           map.setView([pos.coords.latitude, pos.coords.longitude], Math.max(map.getZoom(), 14));
@@ -1114,7 +1122,36 @@
     });
   }
 
+  var LOG_FIX_MAX_AGE_MS = 30000;
+
+  function recordLogEntry(lat, lng) {
+    updateCurrentLocationMarker(lat, lng);
+
+    var containing = markersContaining(lat, lng);
+    var entry = {
+      id: uuid(),
+      lat: lat,
+      lng: lng,
+      points: containing.map(function (m) {
+        return { label: m.label, category: m.category };
+      }),
+      loggedAt: new Date().toISOString()
+    };
+    logEntries.unshift(entry);
+    persistLog();
+
+    var msg = 'Logged ' + formatCoords(lat, lng);
+    if (containing.length > 0) {
+      msg += ' — ' + containing.map(function (m) { return m.label; }).join(', ');
+    }
+    showToast(msg, 5000);
+  }
+
   function logCurrentPosition() {
+    if (lastKnownFix && Date.now() - lastKnownFix.at <= LOG_FIX_MAX_AGE_MS) {
+      recordLogEntry(lastKnownFix.lat, lastKnownFix.lng);
+      return;
+    }
     if (!('geolocation' in navigator)) {
       locationMsg.dataset.kind = 'geo-error';
       showToast('Geolocation is not available in this browser.', 4000);
@@ -1124,34 +1161,15 @@
     navigator.geolocation.getCurrentPosition(
       function (pos) {
         delete locationMsg.dataset.kind;
-        var lat = pos.coords.latitude;
-        var lng = pos.coords.longitude;
-        updateCurrentLocationMarker(lat, lng);
-
-        var containing = markersContaining(lat, lng);
-        var entry = {
-          id: uuid(),
-          lat: lat,
-          lng: lng,
-          points: containing.map(function (m) {
-            return { label: m.label, category: m.category };
-          }),
-          loggedAt: new Date().toISOString()
-        };
-        logEntries.unshift(entry);
-        persistLog();
-
-        var msg = 'Logged ' + formatCoords(lat, lng);
-        if (containing.length > 0) {
-          msg += ' — ' + containing.map(function (m) { return m.label; }).join(', ');
-        }
-        showToast(msg, 5000);
+        rememberFix(pos);
+        startWatching();
+        recordLogEntry(pos.coords.latitude, pos.coords.longitude);
       },
       function (err) {
         locationMsg.dataset.kind = 'geo-error';
         showToast('Location unavailable: ' + describeGeoError(err), 5000);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   }
 
