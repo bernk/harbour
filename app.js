@@ -4,6 +4,7 @@
   var STORAGE_KEY_MARKERS = 'vancouver-anchorages-markers';
   var STORAGE_KEY_VIEW = 'vancouver-anchorages-view';
   var STORAGE_KEY_BASEMAP = 'vancouver-anchorages-basemap';
+  var STORAGE_KEY_LOG = 'vancouver-anchorages-log';
   var DEFAULT_CENTER = [49.2937, -123.1200];
   var DEFAULT_ZOOM = 13;
   var MIN_RADIUS = 10;
@@ -39,6 +40,26 @@
       localStorage.setItem(STORAGE_KEY_MARKERS, JSON.stringify(markers));
     } catch (e) {
       console.error('Failed to save markers to localStorage', e);
+    }
+  }
+
+  function loadLog() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY_LOG);
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('Failed to load position log from localStorage', e);
+      return [];
+    }
+  }
+
+  function persistLog() {
+    try {
+      localStorage.setItem(STORAGE_KEY_LOG, JSON.stringify(logEntries));
+    } catch (e) {
+      console.error('Failed to save position log to localStorage', e);
     }
   }
 
@@ -128,6 +149,8 @@
   var pendingDeleteAll = false;
   var currentSearchMatches = [];
   var searchActiveIndex = -1;
+  var logEntries = loadLog();
+  var pendingClearLog = false;
 
   // ---------- Map init ----------
   var savedView = loadView();
@@ -171,6 +194,12 @@
   var exportCsvBtn = document.getElementById('export-csv-btn');
   var deleteAllBtn = document.getElementById('delete-all-btn');
   var locateBtn = document.getElementById('locate-btn');
+  var logPositionBtn = document.getElementById('log-position-btn');
+  var viewLogBtn = document.getElementById('view-log-btn');
+  var logOverlay = document.getElementById('log-overlay');
+  var logList = document.getElementById('log-list');
+  var logClearBtn = document.getElementById('log-clear');
+  var logCloseBtn = document.getElementById('log-close');
   var locationMsg = document.getElementById('location-msg');
   var searchInput = document.getElementById('search-input');
   var searchResults = document.getElementById('search-results');
@@ -886,10 +915,19 @@
   confirmCancelBtn.addEventListener('click', function () {
     pendingDeleteId = null;
     pendingDeleteAll = false;
+    pendingClearLog = false;
     confirmOverlay.classList.add('hidden');
   });
 
   confirmOkBtn.addEventListener('click', function () {
+    if (pendingClearLog) {
+      logEntries = [];
+      persistLog();
+      renderLog();
+      pendingClearLog = false;
+      confirmOverlay.classList.add('hidden');
+      return;
+    }
     if (pendingDeleteAll) {
       deleteAllMarkers();
     } else if (pendingDeleteId) {
@@ -1006,6 +1044,133 @@
 
   locateBtn.addEventListener('click', function () {
     requestLocation(true);
+  });
+
+  // ---------- Position log ----------
+  function markersContaining(lat, lng) {
+    var pos = L.latLng(lat, lng);
+    return markers.filter(function (m) {
+      return map.distance(pos, L.latLng(m.centerLat, m.centerLng)) <= m.radiusMeters;
+    });
+  }
+
+  function formatLogTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function renderLog() {
+    logList.innerHTML = '';
+
+    if (logEntries.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'log-empty';
+      empty.textContent = 'No positions logged yet.';
+      logList.appendChild(empty);
+      logClearBtn.classList.add('hidden');
+      return;
+    }
+    logClearBtn.classList.remove('hidden');
+
+    logEntries.forEach(function (entry) {
+      var item = document.createElement('div');
+      item.className = 'log-entry';
+      item.title = 'Show on map';
+
+      var time = document.createElement('div');
+      time.className = 'log-entry-time';
+      time.textContent = formatLogTime(entry.loggedAt);
+
+      var coords = document.createElement('div');
+      coords.className = 'log-entry-coords';
+      coords.textContent = formatCoords(entry.lat, entry.lng);
+
+      item.appendChild(time);
+      item.appendChild(coords);
+
+      (entry.points || []).forEach(function (p) {
+        var pointRow = document.createElement('div');
+        pointRow.className = 'log-entry-points';
+        var swatch = document.createElement('span');
+        swatch.className = 'log-point-swatch';
+        swatch.style.background = categoryColor(p.category);
+        var name = document.createElement('span');
+        name.textContent = p.label;
+        pointRow.appendChild(swatch);
+        pointRow.appendChild(name);
+        item.appendChild(pointRow);
+      });
+
+      item.addEventListener('click', function () {
+        logOverlay.classList.add('hidden');
+        map.setView([entry.lat, entry.lng], Math.max(map.getZoom(), 15));
+      });
+
+      logList.appendChild(item);
+    });
+  }
+
+  function logCurrentPosition() {
+    if (!('geolocation' in navigator)) {
+      locationMsg.dataset.kind = 'geo-error';
+      showToast('Geolocation is not available in this browser.', 4000);
+      return;
+    }
+    showToast('Getting position…', 0);
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        delete locationMsg.dataset.kind;
+        var lat = pos.coords.latitude;
+        var lng = pos.coords.longitude;
+        updateCurrentLocationMarker(lat, lng);
+
+        var containing = markersContaining(lat, lng);
+        var entry = {
+          id: uuid(),
+          lat: lat,
+          lng: lng,
+          points: containing.map(function (m) {
+            return { label: m.label, category: m.category };
+          }),
+          loggedAt: new Date().toISOString()
+        };
+        logEntries.unshift(entry);
+        persistLog();
+
+        var msg = 'Logged ' + formatCoords(lat, lng);
+        if (containing.length > 0) {
+          msg += ' — ' + containing.map(function (m) { return m.label; }).join(', ');
+        }
+        showToast(msg, 5000);
+      },
+      function (err) {
+        locationMsg.dataset.kind = 'geo-error';
+        showToast('Location unavailable: ' + describeGeoError(err), 5000);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
+
+  logPositionBtn.addEventListener('click', logCurrentPosition);
+
+  viewLogBtn.addEventListener('click', function () {
+    renderLog();
+    logOverlay.classList.remove('hidden');
+  });
+
+  logCloseBtn.addEventListener('click', function () {
+    logOverlay.classList.add('hidden');
+  });
+
+  logClearBtn.addEventListener('click', function () {
+    pendingClearLog = true;
+    confirmTitle.textContent = 'Clear the position log?';
+    confirmText.textContent = 'Delete all ' + logEntries.length + ' logged position' + (logEntries.length === 1 ? '' : 's') + '? This action cannot be undone.';
+    confirmOverlay.classList.remove('hidden');
   });
 
   // ---------- Search ----------
