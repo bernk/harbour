@@ -161,8 +161,8 @@
   );
 
   // var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    // var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-  var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+    var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  // var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     maxZoom: 19,
     subdomains: 'abcd'
@@ -187,6 +187,106 @@
   map.on('moveend', function () {
     persistView(map.getCenter(), map.getZoom());
   });
+
+  // ---------- One-finger double-tap-drag zoom ----------
+  // Double-tap, keep the finger down on the second tap, then drag down to zoom
+  // in or up to zoom out (same gesture as Google/Apple Maps). A quick
+  // double-tap without dragging still zooms in one level.
+  (function () {
+    var container = map.getContainer();
+    var DOUBLE_TAP_MS = 300;      // max delay between the two taps
+    var DOUBLE_TAP_PX = 40;       // max distance between the two taps
+    var ZOOM_PER_PX = 1 / 150;    // dragging 150px changes zoom by one level
+    var TAP_SLOP_PX = 8;          // movement below this still counts as a tap
+
+    var lastTapTime = 0;
+    var lastTapX = 0;
+    var lastTapY = 0;
+    var zooming = false;
+    var dragged = false;
+    var startY = 0;
+    var startX = 0;
+    var startZoom = 0;
+    var anchorLatLng = null;
+    var savedZoomSnap = map.options.zoomSnap;
+
+    function clampZoom(z) {
+      return Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), z));
+    }
+
+    function endGesture() {
+      if (!zooming) return;
+      zooming = false;
+      map.options.zoomSnap = savedZoomSnap;
+      map.dragging.enable();
+    }
+
+    function onTouchStart(e) {
+      if (e.touches.length !== 1) {
+        // A second finger means a pinch — hand the gesture back to Leaflet.
+        endGesture();
+        lastTapTime = 0;
+        return;
+      }
+      var t = e.touches[0];
+      var now = Date.now();
+      var isDoubleTap =
+        now - lastTapTime <= DOUBLE_TAP_MS &&
+        Math.abs(t.clientX - lastTapX) <= DOUBLE_TAP_PX &&
+        Math.abs(t.clientY - lastTapY) <= DOUBLE_TAP_PX;
+      lastTapTime = now;
+      lastTapX = t.clientX;
+      lastTapY = t.clientY;
+      if (!isDoubleTap) return;
+
+      zooming = true;
+      dragged = false;
+      startX = t.clientX;
+      startY = t.clientY;
+      startZoom = map.getZoom();
+      anchorLatLng = map.containerPointToLatLng(
+        map.mouseEventToContainerPoint(t)
+      );
+      savedZoomSnap = map.options.zoomSnap;
+      map.options.zoomSnap = 0;
+      map.dragging.disable();
+      // Keep Leaflet (and synthetic mouse events) out of this touch.
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    function onTouchMove(e) {
+      if (!zooming || e.touches.length !== 1) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var t = e.touches[0];
+      var dy = t.clientY - startY;
+      if (!dragged && Math.abs(dy) < TAP_SLOP_PX && Math.abs(t.clientX - startX) < TAP_SLOP_PX) {
+        return;
+      }
+      dragged = true;
+      // Drag down = zoom in, drag up = zoom out, anchored on the tapped spot.
+      map.setZoomAround(anchorLatLng, clampZoom(startZoom + dy * ZOOM_PER_PX), { animate: false });
+    }
+
+    function onTouchEnd(e) {
+      if (!zooming) return;
+      var wasDragged = dragged;
+      endGesture();
+      e.preventDefault();
+      e.stopPropagation();
+      lastTapTime = 0;
+      if (!wasDragged) {
+        // Plain double-tap: zoom in one level on the tapped spot.
+        map.setZoomAround(anchorLatLng, clampZoom(Math.round(map.getZoom()) + 1));
+      }
+    }
+
+    container.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+    container.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    container.addEventListener('touchend', onTouchEnd, { capture: true, passive: false });
+    container.addEventListener('touchcancel', endGesture, { capture: true });
+  })();
 
   // ---------- DOM refs ----------
   var modeToggleBtn = document.getElementById('mode-toggle');
