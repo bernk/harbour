@@ -31,6 +31,9 @@
   <button id="log-position-btn" class="icon-btn" title="Log position" aria-label="Log current position">
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm4 8h-3v3h-2v-3H8V8h3V5h2v3h3v2z"/></svg>
   </button>
+  <button id="log-note-btn" class="icon-btn" title="Add log entry" aria-label="Add manual log entry">
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+  </button>
   <button id="view-log-btn" class="icon-btn" title="View position log" aria-label="View position log">
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
   </button>
@@ -79,6 +82,21 @@
       <div class="modal-actions-right">
         <button id="marker-form-cancel" class="btn btn-secondary">Cancel</button>
         <button id="marker-form-save" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Manual log entry -->
+<div id="log-note-overlay" class="overlay hidden">
+  <div class="modal">
+    <h3>Add Log Entry</h3>
+    <label for="log-note-input">Note</label>
+    <input type="text" id="log-note-input" maxlength="200" placeholder="e.g. Dropped off passengers" />
+    <div class="modal-actions">
+      <div class="modal-actions-right">
+        <button id="log-note-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="log-note-save" class="btn btn-primary">Log</button>
       </div>
     </div>
   </div>

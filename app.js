@@ -302,6 +302,11 @@
   var deleteAllBtn = document.getElementById('delete-all-btn');
   var locateBtn = document.getElementById('locate-btn');
   var logPositionBtn = document.getElementById('log-position-btn');
+  var logNoteBtn = document.getElementById('log-note-btn');
+  var logNoteOverlay = document.getElementById('log-note-overlay');
+  var logNoteInput = document.getElementById('log-note-input');
+  var logNoteCancelBtn = document.getElementById('log-note-cancel');
+  var logNoteSaveBtn = document.getElementById('log-note-save');
   var viewLogBtn = document.getElementById('view-log-btn');
   var logOverlay = document.getElementById('log-overlay');
   var logList = document.getElementById('log-list');
@@ -1270,6 +1275,13 @@
       item.appendChild(time);
       item.appendChild(coords);
 
+      if (entry.note) {
+        var note = document.createElement('div');
+        note.className = 'log-entry-note';
+        note.textContent = entry.note;
+        item.appendChild(note);
+      }
+
       if (entry.event) {
         var eventRow = document.createElement('div');
         eventRow.className = 'log-entry-points log-entry-event log-entry-event-' + entry.event;
@@ -1330,9 +1342,9 @@
     showToast(msg, 5000);
   }
 
-  function logCurrentPosition() {
+  function withCurrentPosition(onPosition) {
     if (lastKnownFix && Date.now() - lastKnownFix.at <= LOG_FIX_MAX_AGE_MS) {
-      recordLogEntry(lastKnownFix.lat, lastKnownFix.lng);
+      onPosition(lastKnownFix.lat, lastKnownFix.lng);
       return;
     }
     if (!('geolocation' in navigator)) {
@@ -1346,7 +1358,7 @@
         delete locationMsg.dataset.kind;
         rememberFix(pos);
         startWatching();
-        recordLogEntry(pos.coords.latitude, pos.coords.longitude);
+        onPosition(pos.coords.latitude, pos.coords.longitude);
       },
       function (err) {
         locationMsg.dataset.kind = 'geo-error';
@@ -1356,7 +1368,51 @@
     );
   }
 
+  function logCurrentPosition() {
+    withCurrentPosition(recordLogEntry);
+  }
+
   logPositionBtn.addEventListener('click', logCurrentPosition);
+
+  function recordLogNote(text, lat, lng) {
+    updateCurrentLocationMarker(lat, lng);
+    var entry = {
+      id: uuid(),
+      lat: lat,
+      lng: lng,
+      note: text,
+      loggedAt: new Date().toISOString()
+    };
+    logEntries.unshift(entry);
+    persistLog();
+    showToast('Logged: ' + text, 4000);
+  }
+
+  function openLogNoteForm() {
+    logNoteInput.value = '';
+    logNoteOverlay.classList.remove('hidden');
+    logNoteInput.focus();
+  }
+
+  function closeLogNoteForm() {
+    logNoteOverlay.classList.add('hidden');
+  }
+
+  logNoteBtn.addEventListener('click', openLogNoteForm);
+
+  logNoteCancelBtn.addEventListener('click', closeLogNoteForm);
+
+  logNoteSaveBtn.addEventListener('click', function () {
+    var text = logNoteInput.value.trim();
+    if (!text) {
+      logNoteInput.focus();
+      return;
+    }
+    closeLogNoteForm();
+    withCurrentPosition(function (lat, lng) {
+      recordLogNote(text, lat, lng);
+    });
+  });
 
   viewLogBtn.addEventListener('click', function () {
     renderLog();

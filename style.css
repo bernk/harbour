@@ -344,6 +344,13 @@ html, body {
   font-weight: 600;
 }
 
+.log-entry-note {
+  font-size: 13px;
+  color: #2d2d2d;
+  margin-top: 3px;
+  font-style: italic;
+}
+
 .log-entry-event-arrive { color: var(--current-loc-color); }
 
 .log-entry-event-depart { color: var(--danger-color); }
