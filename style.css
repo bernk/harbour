@@ -340,6 +340,14 @@ html, body {
   margin-top: 3px;
 }
 
+.log-entry-event {
+  font-weight: 600;
+}
+
+.log-entry-event-arrive { color: var(--current-loc-color); }
+
+.log-entry-event-depart { color: var(--danger-color); }
+
 .log-point-swatch {
   width: 9px;
   height: 9px;

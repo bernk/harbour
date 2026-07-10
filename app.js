@@ -149,6 +149,7 @@
   var trackingMode = false;
   var lastLocateClickAt = 0;
   var LOCATE_DOUBLE_TAP_MS = 2000;
+  var geofenceState = null;
   var pendingDeleteId = null;
   var pendingDeleteAll = false;
   var currentSearchMatches = [];
@@ -1126,6 +1127,7 @@
         if (trackingMode) {
           map.setView([pos.coords.latitude, pos.coords.longitude], map.getZoom(), { animate: true });
         }
+        updateGeofencing(pos.coords.latitude, pos.coords.longitude);
       },
       function () {},
       { enableHighAccuracy: true, maximumAge: 60000 }
@@ -1197,6 +1199,39 @@
     });
   }
 
+  function logGeofenceEvent(kind, marker, lat, lng) {
+    var entry = {
+      id: uuid(),
+      lat: lat,
+      lng: lng,
+      event: kind,
+      marker: { label: marker.label, category: marker.category },
+      loggedAt: new Date().toISOString()
+    };
+    logEntries.unshift(entry);
+    persistLog();
+    showToast((kind === 'arrive' ? 'Arrive ' : 'Depart ') + marker.label, 4000);
+  }
+
+  function updateGeofencing(lat, lng) {
+    var containingIds = {};
+    markersContaining(lat, lng).forEach(function (m) { containingIds[m.id] = m; });
+
+    if (geofenceState === null) {
+      geofenceState = containingIds;
+      return;
+    }
+
+    Object.keys(geofenceState).forEach(function (id) {
+      if (!containingIds[id]) logGeofenceEvent('depart', geofenceState[id], lat, lng);
+    });
+    Object.keys(containingIds).forEach(function (id) {
+      if (!geofenceState[id]) logGeofenceEvent('arrive', containingIds[id], lat, lng);
+    });
+
+    geofenceState = containingIds;
+  }
+
   function formatLogTime(iso) {
     var d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
@@ -1234,6 +1269,19 @@
 
       item.appendChild(time);
       item.appendChild(coords);
+
+      if (entry.event) {
+        var eventRow = document.createElement('div');
+        eventRow.className = 'log-entry-points log-entry-event log-entry-event-' + entry.event;
+        var eventSwatch = document.createElement('span');
+        eventSwatch.className = 'log-point-swatch';
+        eventSwatch.style.background = categoryColor(entry.marker.category);
+        var eventText = document.createElement('span');
+        eventText.textContent = (entry.event === 'arrive' ? 'Arrive ' : 'Depart ') + entry.marker.label;
+        eventRow.appendChild(eventSwatch);
+        eventRow.appendChild(eventText);
+        item.appendChild(eventRow);
+      }
 
       (entry.points || []).forEach(function (p) {
         var pointRow = document.createElement('div');
