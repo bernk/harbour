@@ -1344,13 +1344,15 @@
       item.className = 'log-entry';
       item.title = 'Show on map';
 
+      var hasCoords = typeof entry.lat === 'number' && typeof entry.lng === 'number';
+
       var time = document.createElement('div');
       time.className = 'log-entry-time';
       time.textContent = formatLogTime(entry.loggedAt);
 
       var coords = document.createElement('div');
       coords.className = 'log-entry-coords';
-      coords.textContent = formatCoords(entry.lat, entry.lng);
+      coords.textContent = hasCoords ? formatCoords(entry.lat, entry.lng) : 'Location unavailable';
 
       item.appendChild(time);
       item.appendChild(coords);
@@ -1392,10 +1394,15 @@
         item.appendChild(pointRow);
       });
 
-      item.addEventListener('click', function () {
-        logOverlay.classList.add('hidden');
-        map.setView([entry.lat, entry.lng], Math.max(map.getZoom(), 15));
-      });
+      if (hasCoords) {
+        item.addEventListener('click', function () {
+          logOverlay.classList.add('hidden');
+          map.setView([entry.lat, entry.lng], Math.max(map.getZoom(), 15));
+        });
+      } else {
+        item.title = '';
+        item.classList.add('log-entry-no-coords');
+      }
 
       logList.appendChild(item);
     });
@@ -1426,7 +1433,7 @@
     showToast(msg, 5000);
   }
 
-  function withCurrentPosition(onPosition) {
+  function withCurrentPosition(onPosition, onUnavailable) {
     if (lastKnownFix && Date.now() - lastKnownFix.at <= LOG_FIX_MAX_AGE_MS) {
       onPosition(lastKnownFix.lat, lastKnownFix.lng);
       return;
@@ -1434,6 +1441,7 @@
     if (!('geolocation' in navigator)) {
       locationMsg.dataset.kind = 'geo-error';
       showToast('Geolocation is not available in this browser.', 4000);
+      if (onUnavailable) onUnavailable();
       return;
     }
     showToast('Getting position…', 0);
@@ -1447,6 +1455,7 @@
       function (err) {
         locationMsg.dataset.kind = 'geo-error';
         showToast('Location unavailable: ' + describeGeoError(err), 5000);
+        if (onUnavailable) onUnavailable();
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
@@ -1459,11 +1468,12 @@
   logPositionBtn.addEventListener('click', logCurrentPosition);
 
   function recordLogNote(text, lat, lng) {
-    updateCurrentLocationMarker(lat, lng);
+    var hasPosition = typeof lat === 'number' && typeof lng === 'number';
+    if (hasPosition) updateCurrentLocationMarker(lat, lng);
     var entry = {
       id: uuid(),
-      lat: lat,
-      lng: lng,
+      lat: hasPosition ? lat : null,
+      lng: hasPosition ? lng : null,
       note: text,
       loggedAt: new Date().toISOString()
     };
@@ -1495,6 +1505,8 @@
     closeLogNoteForm();
     withCurrentPosition(function (lat, lng) {
       recordLogNote(text, lat, lng);
+    }, function () {
+      recordLogNote(text, null, null);
     });
   });
 

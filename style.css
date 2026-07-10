@@ -373,6 +373,10 @@ html, body {
 
 .log-entry:hover { background: #f0f5fb; }
 
+.log-entry-no-coords { cursor: default; }
+
+.log-entry-no-coords:hover { background: none; }
+
 .log-entry-time {
   font-size: 11px;
   color: #888;
