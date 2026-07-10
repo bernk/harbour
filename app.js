@@ -146,6 +146,9 @@
   var currentLocationMarker = null;
   var watchId = null;
   var lastKnownFix = null;
+  var trackingMode = false;
+  var lastLocateClickAt = 0;
+  var LOCATE_DOUBLE_TAP_MS = 2000;
   var pendingDeleteId = null;
   var pendingDeleteAll = false;
   var currentSearchMatches = [];
@@ -1120,11 +1123,30 @@
       function (pos) {
         rememberFix(pos);
         updateCurrentLocationMarker(pos.coords.latitude, pos.coords.longitude);
+        if (trackingMode) {
+          map.setView([pos.coords.latitude, pos.coords.longitude], map.getZoom(), { animate: true });
+        }
       },
       function () {},
       { enableHighAccuracy: true, maximumAge: 60000 }
     );
   }
+
+  function setTrackingMode(on) {
+    trackingMode = on;
+    locateBtn.classList.toggle('tracking', on);
+    locateBtn.title = on ? 'Stop tracking my location' : 'Locate me';
+    if (on) {
+      if (lastKnownFix) {
+        map.setView([lastKnownFix.lat, lastKnownFix.lng], Math.max(map.getZoom(), 14));
+      }
+      startWatching();
+    }
+  }
+
+  map.on('dragstart', function () {
+    if (trackingMode) setTrackingMode(false);
+  });
 
   function requestLocation(panTo) {
     if (!('geolocation' in navigator)) {
@@ -1152,7 +1174,19 @@
   }
 
   locateBtn.addEventListener('click', function () {
-    requestLocation(true);
+    var now = Date.now();
+    if (trackingMode) {
+      setTrackingMode(false);
+      lastLocateClickAt = 0;
+      return;
+    }
+    if (now - lastLocateClickAt <= LOCATE_DOUBLE_TAP_MS) {
+      lastLocateClickAt = 0;
+      setTrackingMode(true);
+    } else {
+      lastLocateClickAt = now;
+      requestLocation(true);
+    }
   });
 
   // ---------- Position log ----------
