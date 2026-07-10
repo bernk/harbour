@@ -203,6 +203,15 @@ html, body {
   max-width: 200px;
 }
 
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #2d2d2d;
+  cursor: pointer;
+}
+
 /* Toast */
 .toast {
   position: absolute;
@@ -297,6 +306,51 @@ html, body {
 
 .swatch-anchorage { background: var(--anchorage-color); }
 .swatch-pickup { background: var(--pickup-color); }
+
+/* Passenger count prompt */
+.passenger-count-modal {
+  width: 280px;
+}
+
+.passenger-count-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.passenger-count-btn {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2d2d2d;
+  cursor: pointer;
+}
+
+.passenger-count-btn:hover { background: #f2f2f2; }
+
+.passenger-count-btn.selected {
+  background: #2d2d2d;
+  border-color: #2d2d2d;
+  color: #fff;
+}
+
+.passenger-count-progress {
+  margin-top: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: #eee;
+  overflow: hidden;
+}
+
+.passenger-count-progress-bar {
+  height: 100%;
+  width: 100%;
+  background: #ccc;
+}
 
 /* Position log */
 .log-modal {

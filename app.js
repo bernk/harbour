@@ -5,6 +5,9 @@
   var STORAGE_KEY_VIEW = 'vancouver-anchorages-view';
   var STORAGE_KEY_BASEMAP = 'vancouver-anchorages-basemap';
   var STORAGE_KEY_LOG = 'vancouver-anchorages-log';
+  var STORAGE_KEY_PASSENGER_COUNT_ENABLED = 'vancouver-anchorages-passenger-count-enabled';
+  var PASSENGER_COUNT_IDLE_MS = 60000;
+  var PASSENGER_COUNT_SELECTED_MS = 5000;
   var DEFAULT_CENTER = [49.2937, -123.1200];
   var DEFAULT_ZOOM = 13;
   var MIN_RADIUS = 10;
@@ -156,6 +159,7 @@
   var searchActiveIndex = -1;
   var logEntries = loadLog();
   var pendingClearLog = false;
+  var passengerCountEnabled = loadPassengerCountEnabled();
 
   // ---------- Map init ----------
   var savedView = loadView();
@@ -182,6 +186,14 @@
       return localStorage.getItem(STORAGE_KEY_BASEMAP) === 'satellite' ? 'satellite' : 'streets';
     } catch (e) {
       return 'streets';
+    }
+  }
+
+  function loadPassengerCountEnabled() {
+    try {
+      return localStorage.getItem(STORAGE_KEY_PASSENGER_COUNT_ENABLED) === 'true';
+    } catch (e) {
+      return false;
     }
   }
 
@@ -300,6 +312,12 @@
   var importCsvFile = document.getElementById('import-csv-file');
   var exportCsvBtn = document.getElementById('export-csv-btn');
   var deleteAllBtn = document.getElementById('delete-all-btn');
+  var passengerCountToggle = document.getElementById('passenger-count-toggle');
+  var passengerCountOverlay = document.getElementById('passenger-count-overlay');
+  var passengerCountTitle = document.getElementById('passenger-count-title');
+  var passengerCountGrid = document.getElementById('passenger-count-grid');
+  var passengerCountButtons = passengerCountGrid.querySelectorAll('.passenger-count-btn');
+  var passengerCountProgressBar = document.getElementById('passenger-count-progress-bar');
   var locateBtn = document.getElementById('locate-btn');
   var logPositionBtn = document.getElementById('log-position-btn');
   var logNoteBtn = document.getElementById('log-note-btn');
@@ -638,6 +656,60 @@
   });
 
   updateBasemapButtonLabel();
+
+  // ---------- Passenger count setting ----------
+  passengerCountToggle.checked = passengerCountEnabled;
+
+  passengerCountToggle.addEventListener('change', function () {
+    passengerCountEnabled = passengerCountToggle.checked;
+    try {
+      localStorage.setItem(STORAGE_KEY_PASSENGER_COUNT_ENABLED, String(passengerCountEnabled));
+    } catch (e) {
+      console.error('Failed to save passenger count preference', e);
+    }
+  });
+
+  // ---------- Passenger count prompt ----------
+  var passengerCountTimer = null;
+  var passengerCountSelectedBtn = null;
+  var passengerCountOnSelect = null;
+
+  function startPassengerCountCountdown(ms) {
+    clearTimeout(passengerCountTimer);
+    passengerCountProgressBar.style.transition = 'none';
+    passengerCountProgressBar.style.width = '100%';
+    void passengerCountProgressBar.offsetWidth; // force reflow so the transition below restarts
+    passengerCountProgressBar.style.transition = 'width ' + ms + 'ms linear';
+    passengerCountProgressBar.style.width = '0%';
+    passengerCountTimer = setTimeout(closePassengerCountModal, ms);
+  }
+
+  function closePassengerCountModal() {
+    clearTimeout(passengerCountTimer);
+    passengerCountTimer = null;
+    passengerCountOverlay.classList.add('hidden');
+    passengerCountSelectedBtn = null;
+    passengerCountOnSelect = null;
+  }
+
+  function openPassengerCountModal(kind, onSelect) {
+    passengerCountTitle.textContent = kind === 'depart' ? 'Passengers On' : 'Passengers Off';
+    passengerCountSelectedBtn = null;
+    passengerCountOnSelect = onSelect;
+    passengerCountButtons.forEach(function (btn) { btn.classList.remove('selected'); });
+    passengerCountOverlay.classList.remove('hidden');
+    startPassengerCountCountdown(PASSENGER_COUNT_IDLE_MS);
+  }
+
+  passengerCountButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (passengerCountSelectedBtn) passengerCountSelectedBtn.classList.remove('selected');
+      passengerCountSelectedBtn = btn;
+      btn.classList.add('selected');
+      if (passengerCountOnSelect) passengerCountOnSelect(Number(btn.dataset.count));
+      startPassengerCountCountdown(PASSENGER_COUNT_SELECTED_MS);
+    });
+  });
 
   // ---------- Drawing new markers ----------
   function cancelPendingNew() {
@@ -1216,6 +1288,14 @@
     logEntries.unshift(entry);
     persistLog();
     showToast((kind === 'arrive' ? 'Arrive ' : 'Depart ') + marker.label, 4000);
+
+    if (passengerCountEnabled && marker.category === 'pickupDropoff') {
+      openPassengerCountModal(kind, function (count) {
+        entry.passengerCount = count;
+        persistLog();
+        if (!logOverlay.classList.contains('hidden')) renderLog();
+      });
+    }
   }
 
   function updateGeofencing(lat, lng) {
@@ -1290,6 +1370,10 @@
         eventSwatch.style.background = categoryColor(entry.marker.category);
         var eventText = document.createElement('span');
         eventText.textContent = (entry.event === 'arrive' ? 'Arrive ' : 'Depart ') + entry.marker.label;
+        if (typeof entry.passengerCount === 'number') {
+          eventText.textContent += ' — ' + entry.passengerCount + (entry.passengerCount === 1 ? ' passenger' : ' passengers')
+            + (entry.event === 'arrive' ? ' off' : ' on');
+        }
         eventRow.appendChild(eventSwatch);
         eventRow.appendChild(eventText);
         item.appendChild(eventRow);
