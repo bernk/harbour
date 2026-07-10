@@ -203,6 +203,12 @@ html, body {
   max-width: 200px;
 }
 
+#version-label {
+  font-size: 11px;
+  color: #999;
+  font-variant-numeric: tabular-nums;
+}
+
 .checkbox-option {
   display: flex;
   align-items: center;

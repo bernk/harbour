@@ -1,0 +1,15 @@
+#!/bin/sh
+# Regenerates version.js (commit count + short hash) after every commit and
+# stages it, so the next commit picks up the version bump automatically.
+# Tracked copy of the hook installed at .git/hooks/post-commit — if you clone
+# this repo fresh, reinstall it with:
+#   cp .githooks/post-commit .git/hooks/post-commit && chmod +x .git/hooks/post-commit
+
+build=$(git rev-list --count HEAD)
+hash=$(git rev-parse --short HEAD)
+
+cat > version.js <<EOF
+window.APP_VERSION = { build: $build, hash: '$hash' };
+EOF
+
+git add version.js

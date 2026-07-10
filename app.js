@@ -312,6 +312,7 @@
   var importCsvFile = document.getElementById('import-csv-file');
   var exportCsvBtn = document.getElementById('export-csv-btn');
   var deleteAllBtn = document.getElementById('delete-all-btn');
+  var versionLabel = document.getElementById('version-label');
   var passengerCountToggle = document.getElementById('passenger-count-toggle');
   var passengerCountOverlay = document.getElementById('passenger-count-overlay');
   var passengerCountTitle = document.getElementById('passenger-count-title');
@@ -656,6 +657,10 @@
   });
 
   updateBasemapButtonLabel();
+
+  if (window.APP_VERSION) {
+    versionLabel.textContent = 'v' + window.APP_VERSION.build + ' · ' + window.APP_VERSION.hash;
+  }
 
   // ---------- Passenger count setting ----------
   passengerCountToggle.checked = passengerCountEnabled;
