@@ -388,6 +388,10 @@ html, body {
   color: #888;
 }
 
+.log-entry-seconds {
+  color: #ccc;
+}
+
 .log-entry-coords {
   font-size: 14px;
   font-weight: 600;

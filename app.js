@@ -1351,11 +1351,13 @@
 
   function formatLogTime(iso) {
     var d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    return d.toLocaleString(undefined, {
+    if (isNaN(d.getTime())) return { main: iso, seconds: '' };
+    var main = d.toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit', hour12: false
     });
+    var seconds = String(d.getSeconds()).padStart(2, '0');
+    return { main: main, seconds: seconds };
   }
 
   function renderLog() {
@@ -1380,7 +1382,14 @@
 
       var time = document.createElement('div');
       time.className = 'log-entry-time';
-      time.textContent = formatLogTime(entry.loggedAt);
+      var timeParts = formatLogTime(entry.loggedAt);
+      var timeMain = document.createElement('span');
+      timeMain.textContent = timeParts.main;
+      var timeSeconds = document.createElement('span');
+      timeSeconds.className = 'log-entry-seconds';
+      timeSeconds.textContent = ':' + timeParts.seconds;
+      time.appendChild(timeMain);
+      time.appendChild(timeSeconds);
 
       var coords = document.createElement('div');
       coords.className = 'log-entry-coords';
