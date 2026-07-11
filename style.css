@@ -236,6 +236,15 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
+.version-message {
+  color: #bbb;
+  font-style: italic;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .checkbox-option {
   display: flex;
   align-items: center;

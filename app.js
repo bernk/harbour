@@ -734,7 +734,16 @@
   updateBasemapButtons();
 
   if (window.APP_VERSION) {
-    versionLabel.textContent = 'v' + window.APP_VERSION.build + ' · ' + window.APP_VERSION.hash;
+    var versionLine = document.createElement('div');
+    versionLine.textContent = 'v' + window.APP_VERSION.build + ' · ' + window.APP_VERSION.hash;
+    versionLabel.appendChild(versionLine);
+
+    if (window.APP_VERSION.message) {
+      var versionMessage = document.createElement('div');
+      versionMessage.className = 'version-message';
+      versionMessage.textContent = window.APP_VERSION.message;
+      versionLabel.appendChild(versionMessage);
+    }
   }
 
   // ---------- Passenger count setting ----------
