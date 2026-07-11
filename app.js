@@ -27,6 +27,56 @@
     pickupDropoff: 'Pick-up / Drop-off'
   };
 
+  var CARTO_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+  var DEFAULT_BASEMAP_KEY = 'light-nolabels';
+  // Fixed tile used to render the little map-style preview on each basemap button (Vancouver Harbour @ z12).
+  var BASEMAP_PREVIEW_TILE = { z: 12, x: 647, y: 1401 };
+  var BASEMAPS = [
+    {
+      key: 'light-nolabels',
+      label: 'Streets',
+      url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+      attribution: CARTO_ATTRIBUTION,
+      subdomains: 'abcd'
+    },
+    {
+      key: 'light',
+      label: 'Light',
+      url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      attribution: CARTO_ATTRIBUTION,
+      subdomains: 'abcd'
+    },
+    {
+      key: 'dark',
+      label: 'Dark',
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      attribution: CARTO_ATTRIBUTION,
+      subdomains: 'abcd'
+    },
+    {
+      key: 'dark-nolabels',
+      label: 'Dark (no labels)',
+      url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+      attribution: CARTO_ATTRIBUTION,
+      subdomains: 'abcd'
+    },
+    {
+      key: 'satellite',
+      label: 'Satellite',
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+    }
+  ];
+
+  function resolveTileUrl(template, s, z, x, y) {
+    return template
+      .replace('{s}', s)
+      .replace('{z}', z)
+      .replace('{x}', x)
+      .replace('{y}', y)
+      .replace('{r}', window.devicePixelRatio > 1 ? '@2x' : '');
+  }
+
   // ---------- Storage helpers ----------
   function loadMarkers() {
     try {
@@ -171,24 +221,20 @@
     savedView ? savedView.zoom : DEFAULT_ZOOM
   );
 
-  // var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-  // var streetsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    maxZoom: 19,
-    subdomains: 'abcd'
-  });
-
-  var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
-    maxZoom: 19
+  var basemapLayers = {};
+  BASEMAPS.forEach(function (b) {
+    var opts = { attribution: b.attribution, maxZoom: 19 };
+    if (b.subdomains) opts.subdomains = b.subdomains;
+    basemapLayers[b.key] = L.tileLayer(b.url, opts);
   });
 
   function loadBasemap() {
     try {
-      return localStorage.getItem(STORAGE_KEY_BASEMAP) === 'satellite' ? 'satellite' : 'streets';
+      var saved = localStorage.getItem(STORAGE_KEY_BASEMAP);
+      var known = BASEMAPS.some(function (b) { return b.key === saved; });
+      return known ? saved : DEFAULT_BASEMAP_KEY;
     } catch (e) {
-      return 'streets';
+      return DEFAULT_BASEMAP_KEY;
     }
   }
 
@@ -209,7 +255,7 @@
   }
 
   var currentBasemap = loadBasemap();
-  (currentBasemap === 'satellite' ? satelliteLayer : streetsLayer).addTo(map);
+  basemapLayers[currentBasemap].addTo(map);
 
   map.on('moveend', function () {
     persistView(map.getCenter(), map.getZoom());
@@ -318,7 +364,7 @@
   // ---------- DOM refs ----------
   var modeToggleBtn = document.getElementById('mode-toggle');
   var editToolbar = document.getElementById('edit-toolbar');
-  var basemapToggleBtn = document.getElementById('basemap-toggle-btn');
+  var basemapPicker = document.getElementById('basemap-picker');
   var importCsvBtn = document.getElementById('import-csv-btn');
   var importCsvFile = document.getElementById('import-csv-file');
   var exportCsvBtn = document.getElementById('export-csv-btn');
@@ -646,34 +692,46 @@
     setEditMode(!editMode);
   });
 
-  // ---------- Basemap toggle ----------
-  function updateBasemapButtonLabel() {
-    basemapToggleBtn.textContent = currentBasemap === 'satellite' ? 'View: Satellite' : 'View: Map';
+  // ---------- Basemap picker ----------
+  function updateBasemapButtons() {
+    basemapPicker.querySelectorAll('.basemap-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.basemap === currentBasemap);
+    });
   }
 
-  function setBasemap(name) {
-    if (name === currentBasemap) return;
-    if (name === 'satellite') {
-      map.removeLayer(streetsLayer);
-      satelliteLayer.addTo(map);
-    } else {
-      map.removeLayer(satelliteLayer);
-      streetsLayer.addTo(map);
-    }
-    currentBasemap = name;
+  function setBasemap(key) {
+    if (key === currentBasemap || !basemapLayers[key]) return;
+    map.removeLayer(basemapLayers[currentBasemap]);
+    basemapLayers[key].addTo(map);
+    currentBasemap = key;
     try {
-      localStorage.setItem(STORAGE_KEY_BASEMAP, name);
+      localStorage.setItem(STORAGE_KEY_BASEMAP, key);
     } catch (e) {
       console.error('Failed to save basemap preference', e);
     }
-    updateBasemapButtonLabel();
+    updateBasemapButtons();
   }
 
-  basemapToggleBtn.addEventListener('click', function () {
-    setBasemap(currentBasemap === 'satellite' ? 'streets' : 'satellite');
+  BASEMAPS.forEach(function (b) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'basemap-btn';
+    btn.dataset.basemap = b.key;
+    btn.title = b.label;
+    btn.setAttribute('aria-label', b.label);
+
+    var s = b.subdomains ? b.subdomains[0] : 'a';
+    var previewUrl = resolveTileUrl(b.url, s, BASEMAP_PREVIEW_TILE.z, BASEMAP_PREVIEW_TILE.x, BASEMAP_PREVIEW_TILE.y);
+    var swatch = document.createElement('span');
+    swatch.className = 'basemap-swatch';
+    swatch.style.backgroundImage = 'url(' + previewUrl + ')';
+    btn.appendChild(swatch);
+
+    btn.addEventListener('click', function () { setBasemap(b.key); });
+    basemapPicker.appendChild(btn);
   });
 
-  updateBasemapButtonLabel();
+  updateBasemapButtons();
 
   if (window.APP_VERSION) {
     versionLabel.textContent = 'v' + window.APP_VERSION.build + ' · ' + window.APP_VERSION.hash;

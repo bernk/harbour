@@ -1,1 +1,1 @@
-window.APP_VERSION = { build: 35, hash: 'c652063' };
+window.APP_VERSION = { build: 36, hash: '3320d48' };
