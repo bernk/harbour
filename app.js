@@ -6,8 +6,10 @@
   var STORAGE_KEY_BASEMAP = 'vancouver-anchorages-basemap';
   var STORAGE_KEY_LOG = 'vancouver-anchorages-log';
   var STORAGE_KEY_PASSENGER_COUNT_ENABLED = 'vancouver-anchorages-passenger-count-enabled';
+  var STORAGE_KEY_HIDE_BRIEF_ANCHORAGE_VISITS = 'vancouver-anchorages-hide-brief-anchorage-visits';
   var PASSENGER_COUNT_IDLE_MS = 60000;
   var PASSENGER_COUNT_SELECTED_MS = 5000;
+  var BRIEF_ANCHORAGE_VISIT_MS = 2 * 60 * 1000;
   var DEFAULT_CENTER = [49.2937, -123.1200];
   var DEFAULT_ZOOM = 13;
   var MIN_RADIUS = 10;
@@ -160,6 +162,7 @@
   var logEntries = loadLog();
   var pendingClearLog = false;
   var passengerCountEnabled = loadPassengerCountEnabled();
+  var hideBriefAnchorageVisits = loadHideBriefAnchorageVisits();
 
   // ---------- Map init ----------
   var savedView = loadView();
@@ -192,6 +195,14 @@
   function loadPassengerCountEnabled() {
     try {
       return localStorage.getItem(STORAGE_KEY_PASSENGER_COUNT_ENABLED) === 'true';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function loadHideBriefAnchorageVisits() {
+    try {
+      return localStorage.getItem(STORAGE_KEY_HIDE_BRIEF_ANCHORAGE_VISITS) === 'true';
     } catch (e) {
       return false;
     }
@@ -314,6 +325,7 @@
   var deleteAllBtn = document.getElementById('delete-all-btn');
   var versionLabel = document.getElementById('version-label');
   var passengerCountToggle = document.getElementById('passenger-count-toggle');
+  var hideBriefAnchorageToggle = document.getElementById('hide-brief-anchorage-toggle');
   var passengerCountOverlay = document.getElementById('passenger-count-overlay');
   var passengerCountTitle = document.getElementById('passenger-count-title');
   var passengerCountGrid = document.getElementById('passenger-count-grid');
@@ -674,6 +686,19 @@
     } catch (e) {
       console.error('Failed to save passenger count preference', e);
     }
+  });
+
+  // ---------- Hide brief anchorage visits setting ----------
+  hideBriefAnchorageToggle.checked = hideBriefAnchorageVisits;
+
+  hideBriefAnchorageToggle.addEventListener('change', function () {
+    hideBriefAnchorageVisits = hideBriefAnchorageToggle.checked;
+    try {
+      localStorage.setItem(STORAGE_KEY_HIDE_BRIEF_ANCHORAGE_VISITS, String(hideBriefAnchorageVisits));
+    } catch (e) {
+      console.error('Failed to save hide-brief-anchorage-visits preference', e);
+    }
+    if (!logOverlay.classList.contains('hidden')) renderLog();
   });
 
   // ---------- Passenger count prompt ----------
@@ -1360,6 +1385,33 @@
     return { main: main, seconds: seconds };
   }
 
+  function briefAnchorageVisitEntryIds() {
+    var hiddenIds = new Set();
+    var openArrivals = {};
+
+    for (var i = logEntries.length - 1; i >= 0; i--) {
+      var entry = logEntries[i];
+      if (!entry.event || entry.marker.category !== 'anchorage') continue;
+      var key = entry.marker.label;
+
+      if (entry.event === 'arrive') {
+        openArrivals[key] = entry;
+      } else if (entry.event === 'depart') {
+        var arrival = openArrivals[key];
+        if (arrival) {
+          var gapMs = new Date(entry.loggedAt).getTime() - new Date(arrival.loggedAt).getTime();
+          if (gapMs < BRIEF_ANCHORAGE_VISIT_MS) {
+            hiddenIds.add(arrival.id);
+            hiddenIds.add(entry.id);
+          }
+          delete openArrivals[key];
+        }
+      }
+    }
+
+    return hiddenIds;
+  }
+
   function renderLog() {
     logList.innerHTML = '';
 
@@ -1373,7 +1425,20 @@
     }
     logClearBtn.classList.remove('hidden');
 
-    logEntries.forEach(function (entry) {
+    var hiddenIds = hideBriefAnchorageVisits ? briefAnchorageVisitEntryIds() : null;
+    var visibleEntries = hiddenIds
+      ? logEntries.filter(function (entry) { return !hiddenIds.has(entry.id); })
+      : logEntries;
+
+    if (visibleEntries.length === 0) {
+      var emptyFiltered = document.createElement('div');
+      emptyFiltered.className = 'log-empty';
+      emptyFiltered.textContent = 'All entries are hidden brief anchorage visits.';
+      logList.appendChild(emptyFiltered);
+      return;
+    }
+
+    visibleEntries.forEach(function (entry) {
       var item = document.createElement('div');
       item.className = 'log-entry';
       item.title = 'Show on map';
