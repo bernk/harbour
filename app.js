@@ -319,6 +319,8 @@
   var passengerCountGrid = document.getElementById('passenger-count-grid');
   var passengerCountButtons = passengerCountGrid.querySelectorAll('.passenger-count-btn');
   var passengerCountProgressBar = document.getElementById('passenger-count-progress-bar');
+  var passengerCountCancelBtn = document.getElementById('passenger-count-cancel');
+  var passengerCountLogBtn = document.getElementById('passenger-count-log');
   var locateBtn = document.getElementById('locate-btn');
   var logPositionBtn = document.getElementById('log-position-btn');
   var logNoteBtn = document.getElementById('log-note-btn');
@@ -677,16 +679,17 @@
   // ---------- Passenger count prompt ----------
   var passengerCountTimer = null;
   var passengerCountSelectedBtn = null;
-  var passengerCountOnSelect = null;
+  var passengerCountSelectedCount = null;
+  var passengerCountOnCommit = null;
 
-  function startPassengerCountCountdown(ms) {
+  function startPassengerCountCountdown(ms, onExpire) {
     clearTimeout(passengerCountTimer);
     passengerCountProgressBar.style.transition = 'none';
     passengerCountProgressBar.style.width = '100%';
     void passengerCountProgressBar.offsetWidth; // force reflow so the transition below restarts
     passengerCountProgressBar.style.transition = 'width ' + ms + 'ms linear';
     passengerCountProgressBar.style.width = '0%';
-    passengerCountTimer = setTimeout(closePassengerCountModal, ms);
+    passengerCountTimer = setTimeout(onExpire, ms);
   }
 
   function closePassengerCountModal() {
@@ -694,27 +697,51 @@
     passengerCountTimer = null;
     passengerCountOverlay.classList.add('hidden');
     passengerCountSelectedBtn = null;
-    passengerCountOnSelect = null;
+    passengerCountSelectedCount = null;
+    passengerCountOnCommit = null;
   }
 
-  function openPassengerCountModal(kind, onSelect) {
+  function commitPassengerCount() {
+    if (passengerCountSelectedCount !== null && passengerCountOnCommit) {
+      passengerCountOnCommit(passengerCountSelectedCount);
+    }
+    closePassengerCountModal();
+  }
+
+  function openPassengerCountModal(kind, onCommit) {
     passengerCountTitle.textContent = kind === 'depart' ? 'Passengers On' : 'Passengers Off';
     passengerCountSelectedBtn = null;
-    passengerCountOnSelect = onSelect;
+    passengerCountSelectedCount = null;
+    passengerCountOnCommit = onCommit;
     passengerCountButtons.forEach(function (btn) { btn.classList.remove('selected'); });
     passengerCountOverlay.classList.remove('hidden');
-    startPassengerCountCountdown(PASSENGER_COUNT_IDLE_MS);
+    startPassengerCountCountdown(PASSENGER_COUNT_IDLE_MS, closePassengerCountModal);
   }
+
+  passengerCountCancelBtn.addEventListener('click', closePassengerCountModal);
+  passengerCountLogBtn.addEventListener('click', commitPassengerCount);
+
+  passengerCountOverlay.addEventListener('click', function (e) {
+    if (e.target === passengerCountOverlay) closePassengerCountModal();
+  });
 
   passengerCountButtons.forEach(function (btn) {
     btn.addEventListener('click', function () {
       if (passengerCountSelectedBtn) passengerCountSelectedBtn.classList.remove('selected');
       passengerCountSelectedBtn = btn;
       btn.classList.add('selected');
-      if (passengerCountOnSelect) passengerCountOnSelect(Number(btn.dataset.count));
-      startPassengerCountCountdown(PASSENGER_COUNT_SELECTED_MS);
+      passengerCountSelectedCount = Number(btn.dataset.count);
+      startPassengerCountCountdown(PASSENGER_COUNT_SELECTED_MS, commitPassengerCount);
     });
   });
+
+  // Manual test hook, e.g. from the browser console: testPassengerCount('depart')
+  window.testPassengerCount = function (kind) {
+    kind = kind === 'depart' ? 'depart' : 'arrive';
+    openPassengerCountModal(kind, function (count) {
+      console.log('[testPassengerCount] committed count:', count);
+    });
+  };
 
   // ---------- Drawing new markers ----------
   function cancelPendingNew() {
