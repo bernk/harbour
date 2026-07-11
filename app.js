@@ -322,6 +322,9 @@
   var importCsvBtn = document.getElementById('import-csv-btn');
   var importCsvFile = document.getElementById('import-csv-file');
   var exportCsvBtn = document.getElementById('export-csv-btn');
+  var importLogBtn = document.getElementById('import-log-btn');
+  var importLogFile = document.getElementById('import-log-file');
+  var exportLogBtn = document.getElementById('export-log-btn');
   var deleteAllBtn = document.getElementById('delete-all-btn');
   var versionLabel = document.getElementById('version-label');
   var passengerCountToggle = document.getElementById('passenger-count-toggle');
@@ -891,21 +894,167 @@
     return lines.join('\r\n') + '\r\n';
   }
 
+  function downloadTextFile(text, filename) {
+    var blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   exportCsvBtn.addEventListener('click', function () {
     if (markers.length === 0) {
       showToast('There are no points to export.', 3000);
       return;
     }
-    var blob = new Blob([buildCsv()], { type: 'text/csv;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'anchorages-' + new Date().toISOString().slice(0, 10) + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadTextFile(buildCsv(), 'anchorages-' + new Date().toISOString().slice(0, 10) + '.csv');
     showToast('Exported ' + markers.length + ' point' + (markers.length === 1 ? '' : 's') + '.', 4000);
+  });
+
+  // ---------- Log CSV import/export ----------
+  function buildLogCsv() {
+    var lines = ['LoggedAt,Latitude,Longitude,Note,Event,MarkerLabel,MarkerCategory,PassengerCount,Points'];
+    logEntries.forEach(function (entry) {
+      var pointsField = (entry.points || []).map(function (p) {
+        return p.label + ' (' + p.category + ')';
+      }).join('; ');
+      lines.push([
+        csvField(entry.loggedAt),
+        typeof entry.lat === 'number' ? entry.lat.toFixed(6) : '',
+        typeof entry.lng === 'number' ? entry.lng.toFixed(6) : '',
+        csvField(entry.note || ''),
+        entry.event || '',
+        csvField(entry.marker ? entry.marker.label : ''),
+        entry.marker ? entry.marker.category : '',
+        typeof entry.passengerCount === 'number' ? entry.passengerCount : '',
+        csvField(pointsField)
+      ].join(','));
+    });
+    return lines.join('\r\n') + '\r\n';
+  }
+
+  exportLogBtn.addEventListener('click', function () {
+    if (logEntries.length === 0) {
+      showToast('There are no log entries to export.', 3000);
+      return;
+    }
+    downloadTextFile(buildLogCsv(), 'anchorages-log-' + new Date().toISOString().slice(0, 10) + '.csv');
+    showToast('Exported ' + logEntries.length + ' log entr' + (logEntries.length === 1 ? 'y' : 'ies') + '.', 4000);
+  });
+
+  function importLogCsvText(text) {
+    var rows = parseCsv(text);
+    if (rows.length <= 1) {
+      showToast('The CSV has no data rows to import.', 4000);
+      return;
+    }
+
+    var header = rows[0].map(function (h) { return h.trim().toLowerCase(); });
+    var loggedAtIdx = header.indexOf('loggedat');
+    var latIdx = header.indexOf('latitude');
+    var lngIdx = header.indexOf('longitude');
+    var noteIdx = header.indexOf('note');
+    var eventIdx = header.indexOf('event');
+    var markerLabelIdx = header.indexOf('markerlabel');
+    var markerCategoryIdx = header.indexOf('markercategory');
+    var passengerCountIdx = header.indexOf('passengercount');
+    var pointsIdx = header.indexOf('points');
+
+    if (loggedAtIdx === -1) {
+      showToast('CSV must have a LoggedAt column.', 5000);
+      return;
+    }
+
+    var imported = 0;
+    var skipped = 0;
+    var newEntries = [];
+
+    for (var i = 1; i < rows.length; i++) {
+      var cols = rows[i];
+      if (cols.length === 1 && cols[0].trim() === '') continue;
+
+      var loggedAtRaw = (cols[loggedAtIdx] || '').trim();
+      var loggedAtDate = new Date(loggedAtRaw);
+      if (!loggedAtRaw || isNaN(loggedAtDate.getTime())) {
+        skipped++;
+        continue;
+      }
+
+      var lat = latIdx !== -1 ? parseFloat(cols[latIdx]) : NaN;
+      var lng = lngIdx !== -1 ? parseFloat(cols[lngIdx]) : NaN;
+
+      var entry = {
+        id: uuid(),
+        lat: isFinite(lat) ? lat : null,
+        lng: isFinite(lng) ? lng : null,
+        loggedAt: loggedAtDate.toISOString()
+      };
+
+      var note = noteIdx !== -1 ? (cols[noteIdx] || '').trim() : '';
+      if (note) entry.note = note;
+
+      var eventVal = eventIdx !== -1 ? (cols[eventIdx] || '').trim() : '';
+      if (eventVal === 'arrive' || eventVal === 'depart') {
+        var markerLabel = markerLabelIdx !== -1 ? (cols[markerLabelIdx] || '').trim() : '';
+        var markerCategory = markerCategoryIdx !== -1 ? (cols[markerCategoryIdx] || '').trim() : '';
+        if (markerLabel && (markerCategory === 'anchorage' || markerCategory === 'pickupDropoff')) {
+          entry.event = eventVal;
+          entry.marker = { label: markerLabel, category: markerCategory };
+          var pcRaw = passengerCountIdx !== -1 ? (cols[passengerCountIdx] || '').trim() : '';
+          if (pcRaw !== '') {
+            var pc = Number(pcRaw);
+            if (isFinite(pc)) entry.passengerCount = pc;
+          }
+        }
+      }
+
+      var pointsRaw = pointsIdx !== -1 ? (cols[pointsIdx] || '').trim() : '';
+      if (pointsRaw) {
+        var points = pointsRaw.split(';').map(function (chunk) {
+          var m = chunk.trim().match(/^(.*)\((anchorage|pickupDropoff)\)$/);
+          if (!m) return null;
+          return { label: m[1].trim(), category: m[2] };
+        }).filter(Boolean);
+        if (points.length > 0) entry.points = points;
+      }
+
+      newEntries.push(entry);
+      imported++;
+    }
+
+    if (newEntries.length > 0) {
+      logEntries = newEntries.concat(logEntries);
+      persistLog();
+      if (!logOverlay.classList.contains('hidden')) renderLog();
+    }
+
+    var msg = 'Imported ' + imported + ' log entr' + (imported === 1 ? 'y' : 'ies') + '.';
+    if (skipped > 0) {
+      msg += ' Skipped ' + skipped + ' invalid row' + (skipped === 1 ? '' : 's') + '.';
+    }
+    showToast(msg, 5000);
+  }
+
+  importLogBtn.addEventListener('click', function () {
+    importLogFile.value = '';
+    importLogFile.click();
+  });
+
+  importLogFile.addEventListener('change', function () {
+    var file = importLogFile.files && importLogFile.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      importLogCsvText(String(e.target.result));
+    };
+    reader.onerror = function () {
+      showToast('Failed to read the CSV file.', 4000);
+    };
+    reader.readAsText(file);
   });
 
   map.on('click', function (e) {
