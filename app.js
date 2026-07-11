@@ -14,9 +14,8 @@
   var DEFAULT_ZOOM = 13;
   var MIN_RADIUS = 10;
   var MAX_RADIUS = 1000;
-  var DEFAULT_RADIUS = 350;
-  var DEFAULT_IMPORT_RADIUS = 300;
   var DRAG_THRESHOLD_METERS = 3;
+  var DEFAULT_CATEGORY = 'pickupDropoff';
 
   var CATEGORY_COLORS = {
     anchorage: '#2b6cb0',
@@ -24,7 +23,11 @@
   };
   var CATEGORY_LABELS = {
     anchorage: 'Anchorage',
-    pickupDropoff: 'Pick-up / Drop-off'
+    pickupDropoff: 'Transfer Point'
+  };
+  var CATEGORY_DEFAULT_RADIUS = {
+    anchorage: 400,
+    pickupDropoff: 25
   };
 
   var CARTO_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
@@ -862,6 +865,8 @@
     var lngIdx = header.indexOf('longitude');
     var diameterIdx = header.indexOf('diameter');
     var radiusIdx = header.indexOf('radius');
+    var typeIdx = header.indexOf('type');
+    if (typeIdx === -1) typeIdx = header.indexOf('category'); // back-compat with older exports
 
     if (labelIdx === -1 || latIdx === -1 || lngIdx === -1) {
       showToast('CSV must have Anchorage, Latitude, and Longitude columns.', 5000);
@@ -879,7 +884,11 @@
       var label = (cols[labelIdx] || '').trim();
       var lat = parseFloat(cols[latIdx]);
       var lng = parseFloat(cols[lngIdx]);
-      var radius = DEFAULT_IMPORT_RADIUS;
+
+      var typeRaw = typeIdx !== -1 ? (cols[typeIdx] || '').trim().toLowerCase() : '';
+      var category = (typeRaw === 'transfer' || typeRaw === 'pickupdropoff') ? 'pickupDropoff' : 'anchorage';
+
+      var radius = CATEGORY_DEFAULT_RADIUS[category];
       if (diameterIdx !== -1 && cols[diameterIdx] !== undefined && cols[diameterIdx].trim() !== '') {
         var parsedDiameter = parseFloat(cols[diameterIdx]);
         if (isFinite(parsedDiameter)) radius = parsedDiameter / 2;
@@ -898,7 +907,7 @@
       newMarkers.push({
         id: uuid(),
         label: label,
-        category: 'anchorage',
+        category: category,
         centerLat: lat,
         centerLng: lng,
         radiusMeters: radius,
@@ -913,7 +922,7 @@
       renderAll();
     }
 
-    var msg = 'Imported ' + imported + ' point' + (imported === 1 ? '' : 's') + '.';
+    var msg = 'Imported ' + imported + ' location' + (imported === 1 ? '' : 's') + '.';
     if (skipped > 0) {
       msg += ' Skipped ' + skipped + ' invalid row' + (skipped === 1 ? '' : 's') + '.';
     }
@@ -948,14 +957,14 @@
   }
 
   function buildCsv() {
-    var lines = ['Anchorage,Latitude,Longitude,Diameter,Category'];
+    var lines = ['Anchorage,Latitude,Longitude,Diameter,Type'];
     markers.forEach(function (m) {
       lines.push([
         csvField(m.label),
         m.centerLat.toFixed(6),
         m.centerLng.toFixed(6),
         Math.round(m.radiusMeters * 2),
-        m.category
+        m.category === 'pickupDropoff' ? 'transfer' : 'anchorage'
       ].join(','));
     });
     return lines.join('\r\n') + '\r\n';
@@ -975,11 +984,11 @@
 
   exportCsvBtn.addEventListener('click', function () {
     if (markers.length === 0) {
-      showToast('There are no points to export.', 3000);
+      showToast('There are no locations to export.', 3000);
       return;
     }
     downloadTextFile(buildCsv(), 'anchorages-' + new Date().toISOString().slice(0, 10) + '.csv');
-    showToast('Exported ' + markers.length + ' point' + (markers.length === 1 ? '' : 's') + '.', 4000);
+    showToast('Exported ' + markers.length + ' location' + (markers.length === 1 ? '' : 's') + '.', 4000);
   });
 
   // ---------- Log CSV import/export ----------
@@ -1127,10 +1136,10 @@
   map.on('click', function (e) {
     if (!editMode || pendingNew) return;
 
-    var category = 'anchorage';
+    var category = DEFAULT_CATEGORY;
     var color = categoryColor(category);
     var circle = L.circle(e.latlng, {
-      radius: DEFAULT_RADIUS,
+      radius: CATEGORY_DEFAULT_RADIUS[category],
       color: color,
       weight: 2,
       fillColor: color,
@@ -1144,7 +1153,7 @@
       iconSize: [16, 16],
       iconAnchor: [8, 8]
     });
-    var handle = L.marker(handlePositionFor(e.latlng.lat, e.latlng.lng, DEFAULT_RADIUS), {
+    var handle = L.marker(handlePositionFor(e.latlng.lat, e.latlng.lng, CATEGORY_DEFAULT_RADIUS[category]), {
       icon: handleIcon,
       draggable: true
     }).addTo(map);
@@ -1199,10 +1208,10 @@
     pendingNew = { circle: circle, handle: handle, moveHandle: moveHandle, category: category };
     activeMarkerId = null;
     openMarkerForm({
-      title: 'New ' + CATEGORY_LABELS[category],
+      title: 'New Location',
       label: '',
       category: category,
-      radius: DEFAULT_RADIUS,
+      radius: CATEGORY_DEFAULT_RADIUS[category],
       lat: e.latlng.lat,
       lng: e.latlng.lng,
       showDelete: false
@@ -1234,7 +1243,7 @@
     if (!markerData) return;
     activeMarkerId = markerId;
     openMarkerForm({
-      title: 'Edit Marker',
+      title: 'Edit Location',
       label: markerData.label,
       category: markerData.category,
       radius: markerData.radiusMeters,
@@ -1269,11 +1278,7 @@
     applyLiveCenter(parsed.lat, parsed.lng);
   });
 
-  radiusInput.addEventListener('input', function () {
-    var raw = Number(radiusInput.value);
-    if (!isFinite(raw) || raw <= 0) return;
-    var val = Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, raw));
-
+  function applyLiveRadius(val) {
     if (pendingNew) {
       pendingNew.circle.setRadius(val);
       var c1 = pendingNew.circle.getLatLng();
@@ -1286,7 +1291,24 @@
         if (entry.handle) entry.handle.setLatLng(handlePositionFor(c2.lat, c2.lng, val));
       }
     }
+  }
+
+  radiusInput.addEventListener('input', function () {
+    var raw = Number(radiusInput.value);
+    if (!isFinite(raw) || raw <= 0) return;
+    applyLiveRadius(Math.min(MAX_RADIUS, Math.max(MIN_RADIUS, raw)));
   });
+
+  (function () {
+    var categoryRadios = document.getElementsByName('category');
+    for (var i = 0; i < categoryRadios.length; i++) {
+      categoryRadios[i].addEventListener('change', function (e) {
+        var defaultRadius = CATEGORY_DEFAULT_RADIUS[e.target.value];
+        radiusInput.value = defaultRadius;
+        applyLiveRadius(defaultRadius);
+      });
+    }
+  })();
 
   formCancelBtn.addEventListener('click', function () {
     if (pendingNew) {
@@ -1362,7 +1384,7 @@
     var markerData = markers.find(function (m) { return m.id === activeMarkerId; });
     pendingDeleteId = activeMarkerId;
     pendingDeleteAll = false;
-    confirmTitle.textContent = 'Delete this marker?';
+    confirmTitle.textContent = 'Delete this location?';
     confirmText.textContent = markerData
       ? 'Delete "' + markerData.label + '"? This action cannot be undone.'
       : 'This action cannot be undone.';
@@ -1419,20 +1441,20 @@
 
   deleteAllBtn.addEventListener('click', function () {
     if (markers.length === 0) {
-      showToast('There are no points to delete.', 3000);
+      showToast('There are no locations to delete.', 3000);
       return;
     }
     pendingDeleteId = null;
     pendingDeleteAll = true;
-    confirmTitle.textContent = 'Delete all points?';
-    confirmText.textContent = 'Delete all ' + markers.length + ' saved point' + (markers.length === 1 ? '' : 's') + '? This action cannot be undone.';
+    confirmTitle.textContent = 'Delete all locations?';
+    confirmText.textContent = 'Delete all ' + markers.length + ' saved location' + (markers.length === 1 ? '' : 's') + '? This action cannot be undone.';
     confirmOverlay.classList.remove('hidden');
   });
 
   // ---------- Empty state ----------
   function updateEmptyState() {
     if (markers.length === 0 && !editMode) {
-      showToast('No markers yet — switch to Edit Mode to add an anchorage or pick-up/drop-off location.', 0);
+      showToast('No locations yet — switch to Edit Mode to add one.', 0);
     } else if (locationMsg.dataset.kind !== 'geo-error') {
       locationMsg.classList.add('hidden');
     }
@@ -1903,7 +1925,7 @@
     if (matches.length === 0) {
       var empty = document.createElement('div');
       empty.className = 'search-result-empty';
-      empty.textContent = 'No matching points';
+      empty.textContent = 'No matching locations';
       searchResults.appendChild(empty);
     } else {
       matches.forEach(function (m, idx) {
@@ -1983,6 +2005,31 @@
 
   searchInput.addEventListener('blur', function () {
     setTimeout(hideSearchResults, 100);
+  });
+
+  // ---------- Modal keyboard shortcuts (desktop) ----------
+  // Enter triggers each modal's primary/confirm button, Esc triggers its
+  // secondary/dismiss button — standard desktop dialog behavior.
+  var MODAL_KEY_ACTIONS = [
+    { overlay: formOverlay, primary: formSaveBtn, secondary: formCancelBtn },
+    { overlay: logNoteOverlay, primary: logNoteSaveBtn, secondary: logNoteCancelBtn },
+    { overlay: passengerCountOverlay, primary: passengerCountLogBtn, secondary: passengerCountCancelBtn },
+    { overlay: confirmOverlay, primary: confirmOkBtn, secondary: confirmCancelBtn },
+    { overlay: logOverlay, primary: logCloseBtn, secondary: logCloseBtn }
+  ];
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== 'Escape') return;
+    var active = null;
+    for (var i = 0; i < MODAL_KEY_ACTIONS.length; i++) {
+      if (!MODAL_KEY_ACTIONS[i].overlay.classList.contains('hidden')) {
+        active = MODAL_KEY_ACTIONS[i];
+        break;
+      }
+    }
+    if (!active) return;
+    e.preventDefault();
+    (e.key === 'Enter' ? active.primary : active.secondary).click();
   });
 
   // ---------- Init ----------

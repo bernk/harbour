@@ -59,7 +59,7 @@
     <input type="checkbox" id="hide-brief-anchorage-toggle" />
     Hide brief anchorage visits (&lt;2 min)
   </label>
-  <div id="edit-hint">Click the map to add a new point</div>
+  <div id="edit-hint">Click the map to add a new location</div>
   <div id="version-label"></div>
 </div>
 
@@ -68,7 +68,7 @@
 <!-- Marker label / category form -->
 <div id="marker-form-overlay" class="overlay hidden">
   <div class="modal">
-    <h3 id="marker-form-title">New Marker</h3>
+    <h3 id="marker-form-title">New Location</h3>
     <label for="marker-label-input">Label</label>
     <input type="text" id="marker-label-input" maxlength="60" placeholder="e.g. Coal Harbour Anchorage" />
 
@@ -77,17 +77,17 @@
 
     <div class="category-select">
       <label class="category-option">
-        <input type="radio" name="category" value="anchorage" checked />
-        <span class="swatch swatch-anchorage"></span> Anchorage
+        <input type="radio" name="category" value="pickupDropoff" checked />
+        <span class="swatch swatch-pickup"></span> Transfer Point
       </label>
       <label class="category-option">
-        <input type="radio" name="category" value="pickupDropoff" />
-        <span class="swatch swatch-pickup"></span> Pick-up / Drop-off
+        <input type="radio" name="category" value="anchorage" />
+        <span class="swatch swatch-anchorage"></span> Anchorage
       </label>
     </div>
 
     <label for="marker-radius-input">Radius (meters)</label>
-    <input type="number" id="marker-radius-input" min="10" max="1000" step="1" value="350" />
+    <input type="number" id="marker-radius-input" min="10" max="1000" step="1" value="25" />
 
     <div class="modal-actions">
       <button id="marker-form-delete" class="btn btn-danger hidden">Delete</button>
@@ -160,7 +160,7 @@
 
 <div id="confirm-overlay" class="overlay hidden">
   <div class="modal">
-    <h3 id="confirm-title">Delete this marker?</h3>
+    <h3 id="confirm-title">Delete this location?</h3>
     <p id="confirm-text">This action cannot be undone.</p>
     <div class="modal-actions">
       <div class="modal-actions-right">

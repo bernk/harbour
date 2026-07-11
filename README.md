@@ -1,6 +1,6 @@
 # Vancouver Harbour Anchorages
 
-A single-user map app for marking anchorages and pick-up/drop-off locations
+A single-user map app for marking anchorage and transfer-point locations
 around Vancouver Harbour as labeled circles. No accounts, no backend — all
 data lives in on-device storage.
 
@@ -8,18 +8,19 @@ Live at [harbour.bernk.com](https://harbour.bernk.com).
 
 ## What it does
 
-- Drop labeled circles on the map for **Anchorages** or **Pick-up / Drop-off**
-  points, each with its own radius.
+- Drop labeled circles on the map for **Anchorage** or **Transfer Point**
+  locations, each with its own radius.
 - **View Mode** (default) is read-only and shows your live location; **Edit
   Mode** (gear icon, top-right) lets you draw, move, resize, rename, and
   delete circles.
-- **Search** points by label from the top bar.
-- **Import/export** points as CSV (`Anchorage,Latitude,Longitude,Diameter,Category`).
+- **Search** locations by label from the top bar.
+- **Import/export** locations as CSV (`Anchorage,Latitude,Longitude,Diameter,Type`, where Type is
+  `anchorage` or `transfer`).
 - **Position log**: drop a pin on your current location, or add a free-text
   manual log entry, at any time. The app also auto-logs arrivals/departures
-  as you cross into or out of a pick-up/drop-off circle.
+  as you cross into or out of a transfer point circle.
 - **Passenger count prompts** (optional, toggled in Edit Mode): when you
-  arrive at or depart a pick-up/drop-off point, a quick 1–12 picker records
+  arrive at or depart a transfer point, a quick 1–12 picker records
   passengers on/off against that log entry.
 - **Tracking mode**: double-tap the locate button to keep the map centered
   on your live position.
@@ -66,3 +67,64 @@ implementation, not a build artifact of this one.
 ## Notes
 
 Map providers can be viewed [here](https://leaflet-extras.github.io/leaflet-providers/preview/)
+
+## Map Types
+
+var CartoDB_Positron = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 20
+});
+
+var CartoDB_PositronNoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 20
+});
+
+var CartoDB_DarkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 20
+});
+
+var CartoDB_DarkMatterNoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 20
+});
+
+
+var CartoDB_Positron = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 20
+});
+
+var CartoDB_PositronNoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 20
+});
+
+var CartoDB_DarkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 20
+});
+
+var CartoDB_DarkMatterNoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+	attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+	subdomains: 'abcd',
+	maxZoom: 20
+});
+
+https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png
+https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png
+https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png
+https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png
+
+
+https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png
+https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png
+https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png
